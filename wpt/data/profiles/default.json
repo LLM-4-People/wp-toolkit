@@ -1,0 +1,455 @@
+{
+  "ftp": {
+    "port": 21,
+    "timeout_s": 45,
+    "retries": 1,
+    "verify_tls": true,
+    "ca_file": "",
+    "max_consecutive_failures": 5,
+    "parallel_reads": 4
+  },
+  "bridge": {
+    "ttl_minutes": 15,
+    "name_retries": 3,
+    "timeout_s": 30,
+    "scan_cap": 0,
+    "max_response_bytes": 16777216
+  },
+  "db": {
+    "autoload_big_bytes": 102400,
+    "autoload_total_warn_bytes": 1048576,
+    "free_space_warn_bytes": 1048576,
+    "connect_timeout_s": 10.0,
+    "read_timeout_s": 300.0
+  },
+  "media_optimize": {
+    "jpeg_quality": 82,
+    "jpeg_max_dim": 2560,
+    "png_max_dim": 1200,
+    "min_savings_ratio": 0.2,
+    "skip_below_bytes": 30720,
+    "exclude_prefixes": [
+      "wp-content/uploads/gravity_forms/"
+    ]
+  },
+  "media": {
+    "extensions": [
+      "jpg",
+      "jpeg",
+      "jpe",
+      "png",
+      "gif",
+      "webp",
+      "avif",
+      "bmp",
+      "ico",
+      "svg",
+      "tiff",
+      "mp3",
+      "m4a",
+      "ogg",
+      "oga",
+      "wav",
+      "flac",
+      "mp4",
+      "m4v",
+      "webm",
+      "mov",
+      "avi",
+      "ogv",
+      "3gp",
+      "3g2",
+      "pdf",
+      "doc",
+      "docx",
+      "xls",
+      "xlsx",
+      "ppt",
+      "pptx",
+      "odt",
+      "key",
+      "txt",
+      "csv",
+      "zip",
+      "gz",
+      "tar"
+    ],
+    "dump_behind_row_ratio": 0.5
+  },
+  "core_integrity": {
+    "known_added": [
+      {
+        "name": "wordfence-waf.php",
+        "marker": "wordfence/waf/bootstrap.php",
+        "max_bytes": 2048,
+        "note": "the Wordfence plugin's WAF bootstrap, deployed at the webroot top level by Wordfence itself and wired via auto_prepend_file"
+      }
+    ]
+  },
+  "http": {
+    "timeout_s": 30,
+    "verify_tls": false,
+    "max_response_bytes": 8388608
+  },
+  "wp_org": {
+    "core_version_check_url": "https://api.wordpress.org/core/version-check/1.7/?locale={locale}",
+    "core_checksums_url": "https://api.wordpress.org/core/checksums/1.0/",
+    "plugins_update_check_url": "https://api.wordpress.org/plugins/update-check/1.1/",
+    "themes_update_check_url": "https://api.wordpress.org/themes/update-check/1.1/",
+    "core_release_zip_url": "https://downloads.wordpress.org/release/wordpress-{version}.zip",
+    "localized_release_zip_url": "https://{subdomain}.wordpress.org/wordpress-{version}-{locale}.zip",
+    "theme_release_zip_url": "https://downloads.wordpress.org/theme/{slug}.{version}.zip",
+    "default_locale": "en_US",
+    "release_zip_prefix": "wordpress/",
+    "cache_dir": ".wpt-cache",
+    "cache_ttl_s": 3600,
+    "json_max_bytes": 8388608,
+    "release_zip_max_bytes": 268435456,
+    "user_agent_template": "wpt/{version}"
+  },
+  "proxy": {
+    "cert_timeout_s": 30,
+    "max_request_bytes": 67108864,
+    "cert_validity_days": 7,
+    "cert_renew_before_s": 86400
+  },
+  "log": {
+    "level": "info"
+  },
+  "webroot_junk": [
+    "error_log",
+    "readme.html",
+    "license.txt",
+    "wp-config-sample.php",
+    ".htaccess.bk",
+    "*.sql",
+    "host_placeholder_page:home.html",
+    "host_placeholder_page:layout-styles.css",
+    "host_placeholder_page:404.shtml",
+    "host_placeholder_page:test.html",
+    "host_account_quota:.ftpquota",
+    "superseded_htaccess:old.htaccess",
+    "superseded_htaccess:.htaccess.old"
+  ],
+  "stale_content_dirs": [
+    "et_temp",
+    "ao_ccss",
+    "wpcf7_uploads",
+    "wpo",
+    "fusionredux"
+  ],
+  "ghost_table_prefixes": [
+    "woocommerce",
+    "jetpack",
+    "nf3",
+    "wpforms",
+    "statistics",
+    "actionscheduler_actions"
+  ],
+  "ghost_marker_plugins": {
+    "nf3": "ninja-forms",
+    "statistics": "wp-statistics"
+  },
+  "duplicate_plugin_groups": [
+    [
+      "litespeed-cache",
+      "wp-super-cache",
+      "w3-total-cache"
+    ],
+    [
+      "elementor",
+      "fusion-builder"
+    ]
+  ],
+  "duplicate_plugin_groups_preferred": {},
+  "migration_leftovers": [
+    "all-in-one-wp-migration",
+    "velvet-blues-update-urls",
+    "search-and-replace",
+    "ai1wm*"
+  ],
+  "known_heavy": [
+    "jetpack",
+    "worker",
+    "wp-statistics"
+  ],
+  "mu_plugin_known_platform": [
+    "automation-by-installatron",
+    "0-worker"
+  ],
+  "backup": {
+    "keep_last": 10,
+    "keep_days": 90,
+    "stale_temp_age_s": 86400,
+    "free_pass_bytes": 2147483648,
+    "free_warn_bytes": 524288000
+  },
+  "walk": {
+    "max_pages": 200,
+    "delay_s": 0.5,
+    "max_depth": 5,
+    "max_response_bytes": 16777216
+  },
+  "suspicious": {
+    "max_file_bytes": 1048576,
+    "patterns": [
+      "(?i)eval\\s*\\(\\s*\\\\?\\s*(base64_decode|gzinflate|gzuncompress|str_rot13|urldecode)\\s*\\(",
+      "(?i:eval)\\s*\\(\\s*\\$_(POST|GET|REQUEST|COOKIE)\\b",
+      "\\$(\\w+)\\s*=\\s*\\$_[A-Z]+\\[[^\\]]*\\](?:\\s*\\[[^\\]]*\\])*\\s*;\\s*(?i:eval)\\s*\\(\\s*\\$\\1\\s*\\)",
+      "\\$GLOBALS\\s*\\[\\s*['\\\"]\\w+['\\\"]\\s*\\]\\s*\\(\\s*\\$"
+    ]
+  },
+  "backup_payloads": {
+    "extensions": [
+      "*.zip",
+      "*.tar.gz",
+      "*.tgz",
+      "*.sql",
+      "*.sql.gz",
+      "*.tar"
+    ],
+    "directories": [
+      "sample-backup",
+      "updraft",
+      "fm_backup"
+    ],
+    "max_park_file_bytes": 268435456
+  },
+  "conditional_junk": {
+    "geoip_files": [
+      "GeoIP.dat",
+      "GeoIPv6.dat"
+    ],
+    "geoip_plugins": [
+      "geoip-detect"
+    ],
+    "page_cache_files": [
+      "*.wpc.log",
+      "wpo-plugins-tables-list.json"
+    ],
+    "page_cache_dirs": [
+      "wp-content/cache/supercache/"
+    ],
+    "page_cache_plugin": "wp-super-cache"
+  },
+  "obsolete_assets": {
+    "known_added": [
+      {
+        "name": "*.eot",
+        "note": "legacy EOT font — no @font-face needs it (every browser in service reads woff2/woff); shipped OFF: enable per site",
+        "enabled": false
+      },
+      {
+        "name": "*.map",
+        "note": "CSS source map — only read by a browser devtools session, never by a visitor; shipped OFF: enable per site",
+        "enabled": false
+      },
+      {
+        "name": "*.po",
+        "note": "gettext SOURCE catalog — .mo/.l10n.php are the runtime formats; enable ONLY the locales the site does not serve (the audit's Site section names the site locale)",
+        "enabled": false
+      }
+    ]
+  },
+  "cull_media": {
+    "min_oversize_px": 0,
+    "max_plan_files": 0
+  },
+  "env": {
+    "php_min_active": "8.2"
+  },
+  "webp": {
+    "quality": 80,
+    "skip_below_bytes": 30720,
+    "max_dim": 0,
+    "purge_originals": false,
+    "data_prefixes": [
+      "wp-content/uploads/gravity_forms/"
+    ],
+    "verify_pages": 20,
+    "verify_retries": 2,
+    "verify_retry_delay_s": 1.0,
+    "challenge_max_bytes": 32768
+  },
+  "deploy": {
+    "ssh_port": 22,
+    "connect_timeout_s": 30,
+    "server_alive_interval_s": 15,
+    "server_alive_count_max": 4,
+    "strict_host_key_checking": "accept-new",
+    "probe_timeout_s": 120,
+    "stream_timeout_s": 0,
+    "stream_bytes_per_s": 20971520,
+    "stream_overhead_s": 60,
+    "verify_batch_paths": 200,
+    "manifest_archive_sha256": true,
+    "preflight_margin_bytes": 268435456,
+    "preflight_write_probe_bytes": 8388608,
+    "preflight_require_known_space": true,
+    "required_files": [
+      "wp-config.php",
+      "wp-load.php",
+      "wp-includes/version.php"
+    ],
+    "required_dirs": [
+      "wp-content"
+    ],
+    "residue_paths": [
+      "ID3",
+      "about.php",
+      "version.php",
+      "class-wp-error.php",
+      "class-wp-query.php",
+      "rest-api",
+      "blocks",
+      "SimplePie",
+      "pomo",
+      "sodium_compat",
+      "Text",
+      "Requests"
+    ],
+    "quota_signatures": [
+      "no space left on device",
+      "disk quota",
+      "quota exceeded",
+      "over quota",
+      "edquot",
+      "not enough space",
+      "no room left",
+      "filesystem full",
+      "out of disk space",
+      "quota violation",
+      "write remote: failure",
+      "error in the ssh layer"
+    ],
+    "auth_signatures": [
+      "permission denied (publickey",
+      "permission denied, please try again",
+      "authentication failed",
+      "too many authentication failures",
+      "no supported authentication methods",
+      "host key verification failed",
+      "host key has changed",
+      "no mutual signature algorithm"
+    ],
+    "network_signatures": [
+      "connection refused",
+      "connection reset",
+      "connection timed out",
+      "operation timed out",
+      "network is unreachable",
+      "no route to host",
+      "could not resolve hostname",
+      "broken pipe",
+      "connection closed",
+      "kex_exchange_identification",
+      "connection lost"
+    ]
+  },
+  "update": {
+    "pre_release_allowed": false,
+    "maintenance": true,
+    "driver": "auto"
+  },
+  "run": {
+    "deadline_s": 3600,
+    "cleanup_deadline_s": 120
+  },
+  "web_script": {
+    "extensions": [
+      ".php",
+      ".phtml",
+      ".php5",
+      ".php7",
+      ".phps",
+      ".phar",
+      ".inc",
+      ".module"
+    ],
+    "signatures": [
+      {
+        "name": "hash_equals(",
+        "note": "a constant-time token compare"
+      },
+      {
+        "name": "$_GET[",
+        "note": "a GET request parameter"
+      },
+      {
+        "name": "scandir(",
+        "note": "a directory listing call"
+      },
+      {
+        "name": "/home/",
+        "note": "an absolute home-directory path"
+      },
+      {
+        "name": "phpinfo(",
+        "note": "a PHP configuration dump"
+      },
+      {
+        "name": "php://input",
+        "note": "the raw request-body stream"
+      }
+    ],
+    "request_globals": [
+      {
+        "name": "$_GET",
+        "note": "a GET request parameter"
+      },
+      {
+        "name": "$_POST",
+        "note": "a POST request parameter"
+      },
+      {
+        "name": "$_REQUEST",
+        "note": "a merged request parameter"
+      },
+      {
+        "name": "$_COOKIE",
+        "note": "a request cookie"
+      }
+    ],
+    "known_artifacts": [
+      {
+        "name": "bridge-????????.php",
+        "note": "wpt's own token-guarded bridge endpoint, deployed by wpt itself (Bridge.ensure); destroy() is best-effort, so a leftover copy is wpt residue to remove, not a third-party backdoor. A '?' is ONE HEX DIGIT (case-insensitive), never 'any character': the shipped name is bridge-<8 hex>.php, and a wider pattern would exempt an attacker's bridge-shell.php"
+      },
+      {
+        "name": "wpt-probe-????????.php",
+        "note": "wpt's own short-lived PHP runtime probe (PhpProbe); it self-deletes after the token-gated answer and the stale sweep removes an expired copy, so a leftover is wpt residue, not a third-party backdoor. A '?' is ONE HEX DIGIT (case-insensitive)"
+      }
+    ],
+    "max_bytes": 262144
+  },
+  "probe": {
+    "ttl_minutes": 15,
+    "name_retries": 3,
+    "timeout_s": 15
+  },
+  "tls": {
+    "warn_days": 14
+  },
+  "logs": {
+    "max_files": 20,
+    "max_file_bytes": 4194304,
+    "max_archive_bytes": 33554432,
+    "max_decompressed_bytes": 268435456,
+    "detail_limit": 20
+  },
+  "discover": {
+    "max_candidates": 50
+  },
+  "source_scan": {
+    "max_file_bytes": 1048576,
+    "detail_limit": 20,
+    "ignore_prefixes": [
+      "wp-admin/",
+      "wp-includes/"
+    ]
+  },
+  "files": {
+    "max_files": 20,
+    "max_file_bytes": 8388608
+  }
+}

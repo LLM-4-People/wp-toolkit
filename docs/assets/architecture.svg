@@ -1,0 +1,109 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 620" role="img" aria-labelledby="title desc">
+  <title id="title">wpt architecture</title>
+  <desc id="desc">Two source modes feed a core engine that produces audits, actions, and reports through one safety contract.</desc>
+  <defs>
+    <linearGradient id="panel" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0b1220"/>
+      <stop offset="1" stop-color="#101d31"/>
+    </linearGradient>
+    <linearGradient id="core" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#102a43"/>
+      <stop offset="1" stop-color="#0f2237"/>
+    </linearGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="10" stdDeviation="18" flood-color="#000000" flood-opacity="0.28"/>
+    </filter>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L9,3 L0,6 Z" fill="#2dd4bf"/>
+    </marker>
+  </defs>
+
+  <rect x="2" y="2" width="1196" height="616" rx="28" fill="url(#panel)" stroke="#1e3a5f" stroke-width="2"/>
+
+  <text x="60" y="62" fill="#f8fafc" font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, sans-serif" font-size="34" font-weight="700" letter-spacing="-0.6">wpt architecture</text>
+  <text x="60" y="94" fill="#94a3b8" font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, sans-serif" font-size="16">one safety contract across both source modes</text>
+  <circle cx="1128" cy="62" r="7" fill="#fbbf24"/>
+  <text x="1116" y="67" fill="#fbbf24" text-anchor="end" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="13">v0.1</text>
+
+  <!-- Sources -->
+  <g filter="url(#shadow)">
+    <rect x="60" y="150" width="300" height="112" rx="16" fill="#111c2e" stroke="#243247"/>
+    <rect x="60" y="280" width="300" height="112" rx="16" fill="#111c2e" stroke="#243247"/>
+    <rect x="60" y="410" width="300" height="112" rx="16" fill="#111c2e" stroke="#243247"/>
+  </g>
+  <g font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, sans-serif">
+    <text x="84" y="186" fill="#f8fafc" font-size="20" font-weight="700">FTP / FTPS</text>
+    <text x="84" y="214" fill="#94a3b8" font-size="14">live webroot · TLS on by default</text>
+    <text x="84" y="238" fill="#2dd4bf" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="12">bounded reads · breakers</text>
+
+    <text x="84" y="316" fill="#f8fafc" font-size="20" font-weight="700">ZIP + SQL dump</text>
+    <text x="84" y="344" fill="#94a3b8" font-size="14">offline audit · rehearsal</text>
+    <text x="84" y="368" fill="#2dd4bf" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="12">original archive = rollback</text>
+
+    <text x="84" y="446" fill="#f8fafc" font-size="20" font-weight="700">Local mode</text>
+    <text x="84" y="474" fill="#94a3b8" font-size="14">rehearsed zip · serve + verify</text>
+    <text x="84" y="498" fill="#2dd4bf" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="12">same path safety rules</text>
+  </g>
+
+  <!-- Arrows in -->
+  <g stroke="#2dd4bf" stroke-width="3" fill="none" marker-end="url(#arrow)">
+    <path d="M360 206 H404"/>
+    <path d="M360 336 H404"/>
+    <path d="M360 466 H404"/>
+  </g>
+
+  <!-- Core -->
+  <g filter="url(#shadow)">
+    <rect x="420" y="150" width="360" height="372" rx="20" fill="url(#core)" stroke="#2a4a6b"/>
+  </g>
+  <g font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, sans-serif">
+    <text x="450" y="192" fill="#f8fafc" font-size="22" font-weight="700">Core engine</text>
+    <text x="450" y="216" fill="#94a3b8" font-size="13">transport-agnostic · one owner per fact</text>
+    <line x1="450" y1="236" x2="750" y2="236" stroke="#2a4a6b"/>
+    <circle cx="458" cy="268" r="4" fill="#2dd4bf"/>
+    <text x="474" y="273" fill="#e2e8f0" font-size="15">Settings + profile</text>
+    <circle cx="458" cy="306" r="4" fill="#2dd4bf"/>
+    <text x="474" y="311" fill="#e2e8f0" font-size="15">Source adapter</text>
+    <circle cx="458" cy="344" r="4" fill="#2dd4bf"/>
+    <text x="474" y="349" fill="#e2e8f0" font-size="15">Planner</text>
+    <circle cx="458" cy="382" r="4" fill="#2dd4bf"/>
+    <text x="474" y="387" fill="#e2e8f0" font-size="15">Snapshot + apply</text>
+    <circle cx="458" cy="420" r="4" fill="#2dd4bf"/>
+    <text x="474" y="425" fill="#e2e8f0" font-size="15">Verify + report</text>
+    <rect x="450" y="456" width="300" height="40" rx="10" fill="#0b1220" stroke="#243247"/>
+    <text x="466" y="481" fill="#94a3b8" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="12">PHP bridge · whitelisted ops · token</text>
+  </g>
+
+  <!-- Arrows out -->
+  <g stroke="#2dd4bf" stroke-width="3" fill="none" marker-end="url(#arrow)">
+    <path d="M780 206 H824"/>
+    <path d="M780 336 H824"/>
+    <path d="M780 466 H824"/>
+  </g>
+
+  <!-- Outputs -->
+  <g filter="url(#shadow)">
+    <rect x="840" y="150" width="300" height="112" rx="16" fill="#111c2e" stroke="#243247"/>
+    <rect x="840" y="280" width="300" height="112" rx="16" fill="#111c2e" stroke="#243247"/>
+    <rect x="840" y="410" width="300" height="112" rx="16" fill="#111c2e" stroke="#243247"/>
+  </g>
+  <g font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, sans-serif">
+    <text x="864" y="186" fill="#f8fafc" font-size="20" font-weight="700">Audit</text>
+    <text x="864" y="214" fill="#94a3b8" font-size="14">38 registered checks</text>
+    <text x="864" y="238" fill="#fbbf24" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="12">findings · risk · fix</text>
+
+    <text x="864" y="316" fill="#f8fafc" font-size="20" font-weight="700">Actions</text>
+    <text x="864" y="344" fill="#94a3b8" font-size="14">plan → snapshot → apply</text>
+    <text x="864" y="368" fill="#fbbf24" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="12">fail-closed</text>
+
+    <text x="864" y="446" fill="#f8fafc" font-size="20" font-weight="700">Reports</text>
+    <text x="864" y="474" fill="#94a3b8" font-size="14">Markdown + JSON twin</text>
+    <text x="864" y="498" fill="#fbbf24" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="12">baseline diffs</text>
+  </g>
+
+  <!-- Footer -->
+  <line x1="60" y1="560" x2="1140" y2="560" stroke="#1e3a5f"/>
+  <circle cx="72" cy="590" r="4" fill="#2dd4bf"/>
+  <text x="86" y="595" fill="#94a3b8" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="12">no secrets in files · plan before apply · bounded runs</text>
+  <text x="1140" y="595" fill="#64748b" text-anchor="end" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="12">MIT</text>
+</svg>

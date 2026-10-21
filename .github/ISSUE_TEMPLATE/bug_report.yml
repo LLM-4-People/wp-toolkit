@@ -1,0 +1,80 @@
+name: Bug report
+description: Report a reproducible defect in wpt.
+title: "[bug] "
+labels: ["bug", "needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting a bug. Do not include credentials, client domains,
+        account IDs, unredacted logs, dumps, or personal data. Use synthetic
+        values such as `site.test` and `192.0.2.10`.
+
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: What happened, and what did you expect instead?
+      placeholder: A concise description of the defect.
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Reproduction
+      description: The smallest command sequence that reproduces it. Redact paths, hosts, and credentials.
+      render: shell
+      placeholder: |
+        wpt --source local --zip site.zip --sql dump.sql audit
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: wpt version
+      description: Output of `wpt --version`.
+      placeholder: wpt 0.1.0
+    validations:
+      required: true
+
+  - type: dropdown
+    id: source
+    attributes:
+      label: Source mode
+      options:
+        - Local zip + SQL dump
+        - FTP / FTPS
+        - Direct database (--db-uri)
+        - Documentation or CI
+        - Not sure
+    validations:
+      required: true
+
+  - type: input
+    id: platform
+    attributes:
+      label: Platform
+      description: OS, Python, PHP, and database versions.
+      placeholder: Linux, Python 3.13, PHP 8.3, MariaDB 11
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant output
+      description: Redact credentials, client data, hostnames, and IPs before pasting.
+      render: text
+      placeholder: "(redacted)"
+
+  - type: checkboxes
+    id: safety
+    attributes:
+      label: Safety check
+      options:
+        - label: I removed credentials, client data, and unredacted logs from this report.
+          required: true
+        - label: I am authorized to test the affected site or system.
+          required: true

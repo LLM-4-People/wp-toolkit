@@ -1,0 +1,227 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  PIP_DISABLE_PIP_VERSION_CHECK: "1"
+  PYTHONUNBUFFERED: "1"
+  TZ: UTC
+
+jobs:
+  lint:
+    name: Lint and contracts
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.13"
+          cache: pip
+          cache-dependency-path: pyproject.toml
+
+      - name: Set up PHP
+        uses: shivammathur/setup-php@eb7c497e18156a6bbabfef1d3a82760b9eda3962 # 2.40.0
+        with:
+          php-version: "8.3"
+          extensions: mbstring, json, openssl
+          coverage: none
+
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e ".[dev,db]"
+
+      - name: Ruff
+        run: python -m ruff check wpt tests
+
+      - name: Dead-code scan
+        run: python -m vulture wpt --min-confidence 80
+
+      - name: Python compile
+        run: python -m compileall -q wpt tests
+
+      - name: PHP syntax
+        run: find wpt -name '*.php' -print0 | xargs -0 -n1 php -l
+
+      - name: Documentation and packaging contracts
+        run: python -m pytest tests/test_docs.py tests/test_packaging.py -q
+
+  docs:
+    name: Docs build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.13"
+          cache: pip
+          cache-dependency-path: pyproject.toml
+
+      - name: Install docs dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e ".[docs]"
+
+      - name: Build docs
+        run: mkdocs build --strict
+
+  test:
+    name: Test ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Linux Python 3.12 PHP 8.3
+            os: ubuntu-24.04
+            python: "3.12"
+            php: "8.3"
+          - name: Linux Python 3.13 PHP 8.3
+            os: ubuntu-24.04
+            python: "3.13"
+            php: "8.3"
+          - name: Linux Python 3.14 PHP 8.3
+            os: ubuntu-24.04
+            python: "3.14"
+            php: "8.3"
+          - name: Linux Python 3.15 PHP 8.5
+            os: ubuntu-24.04
+            python: "3.15"
+            php: "8.5"
+          - name: macOS Python 3.13 PHP 8.5
+            os: macos-15
+            python: "3.13"
+            php: "8.5"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: ${{ matrix.python }}
+          cache: pip
+          cache-dependency-path: pyproject.toml
+
+      - name: Set up PHP
+        uses: shivammathur/setup-php@eb7c497e18156a6bbabfef1d3a82760b9eda3962 # 2.40.0
+        with:
+          php-version: ${{ matrix.php }}
+          extensions: mbstring, json, openssl
+          coverage: none
+
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e ".[dev,db]"
+
+      - name: Preflight
+        run: |
+          python -c "import socks; print('PySocks OK')"
+          php -v
+
+      - name: Test
+        run: python -m pytest tests -q -n auto --dist worksteal -ra
+
+  package:
+    name: Build and install
+    runs-on: ubuntu-24.04
+    needs: [lint, test]
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.13"
+          cache: pip
+          cache-dependency-path: pyproject.toml
+
+      - name: Install build tools
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e ".[dev,db]"
+
+      - name: Build
+        run: python -m build
+
+      - name: Check metadata
+        run: python -m twine check dist/*
+
+      - name: Install wheel and smoke the CLI
+        run: |
+          python -m pip install --no-deps --force-reinstall dist/*.whl
+          wpt --version
+          wpt --help > /dev/null
+
+      - name: Upload distributions
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: dist
+          path: dist/*
+          if-no-files-found: error
+          retention-days: 14
+
+  windows-smoke:
+    name: Windows wheel smoke
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.13"
+          cache: pip
+          cache-dependency-path: pyproject.toml
+
+      - name: Install from source
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install .
+
+      - name: Smoke the console entry point
+        run: |
+          wpt --version
+          wpt --help | Out-Null
+          python -c "from wpt.settings import load; print(load().run.deadline_s)"
+
+  privacy:
+    name: Public safety scan
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.13"
+
+      - name: Scan
+        run: python scripts/check_public_safety.py

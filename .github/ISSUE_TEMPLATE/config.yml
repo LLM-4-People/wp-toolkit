@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Documentation
+    url: https://llm-4-people.github.io/wp-toolkit/
+    about: Quickstart, command workflows, safety model, and FAQ.
+  - name: Security report
+    url: https://github.com/LLM-4-People/wp-toolkit/security/advisories/new
+    about: Report a vulnerability privately. Do not open a public issue for secrets or exploitable defects.

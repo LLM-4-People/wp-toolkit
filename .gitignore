@@ -1,0 +1,51 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.venv/
+venv/
+env/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.tox/
+.coverage
+coverage.xml
+htmlcov/
+
+# Local operations and rehearsal artifacts
+.wpt-*/
+serve.pid
+cert_[0-9][0-9]
+tls.txt
+site/
+
+# Secrets and credentials
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.crt
+*.csr
+*.p12
+*.pfx
+
+# Logs, dumps, snapshots, and archives
+*.log
+*.pid
+*.sql
+*.dump
+*.db
+*.sqlite3
+*.zip
+*.tar.gz
+*.tgz
+
+# Editor and OS noise
+.DS_Store
+.idea/
+.vscode/
+*.swp
