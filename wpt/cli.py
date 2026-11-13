@@ -30,7 +30,8 @@ MUTATING_COMMANDS = ("clean-files", "clean-db", "trim-media", "optimize-media",
                      "harden", "deactivate-plugin", "heal-core", "update-core",
                      "users_reset", "user-create", "reconcile-plugins",
                      "prune-core", "deploy",
-                     "park-backups", "cull-media", "webp-media")
+                     "park-backups", "cull-media", "webp-media",
+                     "php-version")
 
 #: Commands that read the WEBROOT ZIP ONLY: nothing in their plan, apply or
 #: rehearsal opens the SQL dump, so local mode requires --zip and no more.
@@ -86,6 +87,8 @@ COMMANDS = (
     ("logs", "Read bounded host/webroot error logs (ftp only; no --wp-url)"),
     ("discover", "Find WordPress webroot candidates from the FTP account root "
                  "(ftp only; no --webroot/--wp-url required)"),
+    ("php-version", "Switch the account's PHP runtime (--to X.Y; SSH + PHP "
+                    "Selector, preflight lint, verified, auto-rollback; ftp only)"),
     ("files", "Backup/edit/rollback selected webroot files (ftp; local "
               "backup from zip)"),
     ("proxy", "Run a local TLS proxy for browsers (DNS override)"),
@@ -271,6 +274,26 @@ def build_parser() -> argparse.ArgumentParser:
                           metavar="VAR",
                           help="Environment variable holding the ssh password "
                                "(never inline; omit to use key/agent auth)")
+
+    php_p = sub.choices["php-version"]
+    php_p.add_argument("--to", dest="to", metavar="X.Y",
+                       help="The EXPLICIT PHP minor to select (required for "
+                            "--apply). Without it the run only reports the "
+                            "live runtime, the selector's current choice and "
+                            "the offered versions")
+    php_p.add_argument("--ssh-target", metavar="USER@HOST",
+                       help="ssh destination on the hosting account (key/agent "
+                            "auth, or --ssh-password-env); required to read or "
+                            "change the selector")
+    php_p.add_argument("--ssh-port", type=int, default=None, metavar="PORT",
+                       help="ssh port (default from deploy.ssh_port)")
+    php_p.add_argument("--ssh-password-env", dest="ssh_password_env",
+                       metavar="VAR",
+                       help="Environment variable holding the ssh password "
+                            "(never inline; omit to use key/agent auth)")
+    php_p.add_argument("--ssh-webroot", dest="ssh_webroot", metavar="PATH",
+                       help="The webroot's ABSOLUTE path on the host (default: "
+                            "~/<webroot>, the FTP login home)")
 
     files_p = sub.choices["files"]
     files_p.add_argument("--backup", action="append", default=[], metavar="PATH",
@@ -973,7 +996,8 @@ def _main_after_handler(args) -> int:
             # the local panel checks disk + wp.org only; proxy reads no
             # source at all (it is a local TLS tunnel over --hostname/--ip)
             pass
-        elif args.command in ("logs", "discover", "backup", "walk"):
+        elif args.command in ("logs", "discover", "backup", "walk",
+                              "php-version"):
             # ftp-only command bodies own the refusal (and its --report
             # failure artifact); the CLI must not demand inputs they never
             # open.  backup/walk are FTP-only (SPEC §backup/§walk), so a
@@ -1085,6 +1109,12 @@ def _main_after_handler(args) -> int:
         extra["ssh_target"] = args.ssh_target
         extra["ssh_port"] = args.ssh_port
         extra["ssh_password_env"] = args.ssh_password_env
+    if args.command == "php-version":
+        extra["to"] = args.to
+        extra["ssh_target"] = args.ssh_target
+        extra["ssh_port"] = args.ssh_port
+        extra["ssh_password_env"] = args.ssh_password_env
+        extra["ssh_webroot"] = args.ssh_webroot
     if args.command == "files":
         extra["backup"] = args.backup
         extra["restore"] = args.restore
@@ -1252,6 +1282,8 @@ def _dispatch(ctx: Ctx, args, command: str) -> int:
         return _lazy_call(ctx, "wpt.logs", "run")
     if command == "discover":
         return _lazy_call(ctx, "wpt.discover", "run")
+    if command == "php-version":
+        return _lazy_call(ctx, "wpt.php_version", "run")
     if command == "files":
         return _lazy_call(ctx, "wpt.files", "run")
     # The action's credential holder is a module-level singleton, so it is
