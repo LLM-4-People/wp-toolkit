@@ -63,7 +63,7 @@ wpt --source ftp://host:21 --user U --password-env P --webroot domains/site/publ
 commands: audit | clean-files | clean-db | cull-media | park-backups |
           webp-media | trim-media | optimize-media | harden | verify |
           updates | backup | restore | walk | serve | doctor | scan |
-          logs | discover | files | proxy |
+          logs | discover | files | proxy | php-version |
           deactivate-plugin | heal-core | users_reset | user-create |
           reconcile-plugins | update-core |
           prune-core | deploy
@@ -182,6 +182,14 @@ fails if a subparser declares a flag this section does not name):
                                 for --apply; a target is never implicit)
                      --allow-pre-release  accept a pre-release TARGET, or a
                                 dev/beta/RC INSTALL
+    php-version      --to X.Y       the EXPLICIT PHP minor to select (required
+                                    for --apply; without it the run reports)
+                     --ssh-target USER@HOST  the hosting account's shell
+                     --ssh-port N   the ssh port (default deploy.ssh_port)
+                     --ssh-password-env VAR  the password's environment variable
+                                     (omit for key/agent auth)
+                     --ssh-webroot PATH  the webroot's ABSOLUTE path on the host
+                                     (default ~/<webroot>, the FTP login home)
     park-backups     --park-outside DIR  where payloads are moved (must be outside the webroot)
     webp-media       --purge-originals    delete the originals once the rewrite verifies
                      --i-know-editors-are-off  acknowledge the purge window
@@ -279,6 +287,44 @@ One `wpt <command> starting: source=... webroot=... site=...` INFO line is
 logged at the dispatch choke point before any phase output [L15: a killed
 run's stale SIGTERM log tail read as the current run's output for minutes] —
 command/mode/webroot/site URL only, never credentials.
+
+### PHP runtime switch (`php-version`)
+
+The PHP runtime is a HOSTING fact, not a WordPress one; on CloudLinux
+(DirectAdmin/cPanel shared hosting) the account's PHP Selector stores one
+per-user selection (`selectorctl`, user-settable without root). `wpt
+php-version` drives that selector over the SAME SSH transport `deploy`
+owns, and verifies the result where it is actually served:
+
+- **Read**: the selector's `--list` and `-c` answers (one `X.Y\tX.Y.Z\tcgi`
+  row grammar) plus the WEB SAPI's runtime through the standalone PHP probe
+  (the diagnostic that still answers when WordPress is broken). No
+  `--ssh-target` = the live runtime only.
+- **Preflight**: parse-check the ACTIVE workload with the TARGET
+  interpreter's own `php -l` — active plugins (the bridge `info` catalog is
+  the active-set owner), the themes tree (the rendered homepage names the
+  active slug; a static front page lints every theme) and
+  `wp-content/mu-plugins`. An unmeasurable active set or a zero-file pass
+  REFUSES. A file that does not parse is a blocker and no switch happens
+  [L79: a custom theme's `<?` short tags served a 500 contact page only
+  after PHP 8.3 replaced 7.2; the preflight now catches it while the old
+  runtime is still up].
+- **Apply**: `selectorctl -b X.Y`, then re-read the probe until it reports
+  the target minor (`php_version.verify_retries`/`verify_delay_s`), then a
+  cache-busted homepage and `/wp-json/` HTTP check (5xx/0 = failure).
+- **Rollback**: any failed verification re-selects the PREVIOUS minor and
+  re-proves it where possible; the run ends rc 1 with the attempt and the
+  rollback in the report. There is no snapshot: the rollback IS the
+  previous selection string.
+- `--to` is never implicit (the `update-core` rule); a target the selector
+  does not offer refuses with the offered list, and a target below
+  `env.php_min_active` is planned with an EOL warning. `--apply` requires
+  `--yes`. FTP only; every file/HTTP/SSH read is deadline- and
+  profile-bounded (`php_version.*`).
+- LIMIT, stated: the preflight is a PARSE check; removed functions
+  (`each()`, `create_function()`) parse and fail at call time. The probe,
+  HTTP checks and the host logs (`wpt logs`/`wpt doctor`) are the runtime
+  evidence.
 
 ## Backup / restore / walk (v1 scope — user-required)
 
@@ -1125,12 +1171,23 @@ connect. A bare `ftplib.FTP_TLS()` (stdlib `CERT_NONE`) is never used.
   "files": {
     "max_files": 20,
     "max_file_bytes": 8388608
+  },
+  "php_version": {
+    "selectorctl": "/usr/bin/selectorctl",
+    "recommended": "8.3",
+    "command_timeout_s": 60,
+    "lint_timeout_s": 600,
+    "lint_max_files": 6000,
+    "lint_max_failures": 50,
+    "verify_retries": 3,
+    "verify_delay_s": 2.0,
+    "http_timeout_s": 30
   }
 }
 ```
 
 The block above is the shipped `wpt/data/profiles/default.json`, verbatim and
-complete (38 top-level keys: 31 object sections and 7 list sections) —
+complete (39 top-level keys: 32 object sections and 7 list sections) —
 regenerate it from the file, never hand-type it; `tests/test_docs.py`
 compares every leaf against the profile itself: objects and lists recurse,
 lists carry the same values in the same order, and each scalar (including a
@@ -2030,6 +2087,8 @@ another writer and is the coordinator's to schedule.
 | L76 a homepage HTTP 500 read as WARN, so a WP site with a working bridge could exit 0 on a dead front page | `doctor` classifies 5xx as FAIL (4xx stays WARN); test: `test_site_500` |
 | L77 the only TLS signal was a low-risk `security.cert_mismatch` finding that discarded SAN/issuer/expiry and said nothing about HTTP→HTTPS or HSTS | the doctor's `tls certificate` and `https policy` rows report bounded certificate facts, verification, expiry window, redirect and HSTS; tests: `test_doctor_network.py` |
 | L78 editing a non-WordPress application file had no backup/rollback path, so a bad FTP write had no recovery point and a multi-file change could stop halfway | `wpt files` snapshots selected files (manifest + bytes + SHA-256), pairs `--path` with `--from`, writes siblings/temp and renames after read-back, rolls every already-changed target back on failure, and restores by verified snapshot; WordPress core/config paths stay refused; tests: `test_files.py` |
+| L79 a live PHP 7.2 → 8.3 switch turned the contact page into a 500: the custom theme used `<?` short tags, legal under the old ini and literal text under the new one — nothing checked the workload BEFORE the runtime changed | `php-version`'s preflight parses the ACTIVE theme/plugins with the TARGET interpreter and refuses on any failure (tests: `test_a_file_that_does_not_parse_blocks_the_switch`, `test_an_empty_lint_is_a_refusal_not_a_pass`), and a failed post-switch verification re-selects the previous minor (`test_a_switch_that_is_not_served_is_rolled_back`, `test_a_5xx_homepage_after_the_switch_rolls_back`) |
+| L80 update-core could never run TWICE on a site that ever updated through wp-admin: (a) the wordpress driver wrote `.maintenance` before calling the WordPress-loading bridge, so WordPress answered its own 503, and (b) the bridge treated core's permanent `wp-content/upgrade/index.php` guard ("<?php // Silence is golden.") as unfinished staging and refused | (a) the driver never pre-writes `.maintenance` (core's own upgrader engages it for the copy; the teardown removes residue) and the fake bridge now answers 503 when it exists (`test_the_wordpress_driver_installs_the_release_and_verifies`); (b) only core's EXACT guard bytes are exempt, every other entry still refuses (`test_core_upgrade_files_accepts_core_s_own_upgrade_dir_guard`, `test_core_upgrade_files_ignores_a_non_guard_index_but_refuses_staging`, `test_core_s_own_upgrade_guard_is_not_unfinished_staging`) |
 
 ## Documentation
 - `README.md` — usage and the canonical command table.
