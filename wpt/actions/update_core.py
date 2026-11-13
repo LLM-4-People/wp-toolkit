@@ -2097,10 +2097,15 @@ class UpdateCoreAction:
 
         * the package bytes are proven BEFORE the upload (the same
           pre-write proof the swap driver takes, on the same bytes);
-        * ``.maintenance`` is the tool's own, engaged here and removed in
-          the ``finally`` — core writes its own and deletes it on its
-          SUCCESS route only, which is the reachable "stuck in maintenance"
-          state this action exists to close;
+        * ``.maintenance`` is NOT engaged here: the op IS a WordPress
+          request (the bridge loads ``wp-load.php``), and WordPress answers
+          every request with its 503 maintenance page while that file
+          exists — pre-engaging it made the driver unable to start (live:
+          the bridge answer was literally "Indisponibilité temporaire pour
+          cause de maintenance").  Core's own ``Core_Upgrader::upgrade()``
+          engages it for the copy and deletes it on its SUCCESS route only;
+          the ``finally`` removes whatever is left, which is the reachable
+          "stuck in maintenance" state this action exists to close;
         * the DATABASE step is suppressed by the op (core fires it as a
           fire-and-forget POST and never checks the response) and run by
           the caller through ``core_upgrade``, then re-read;
@@ -2128,7 +2133,6 @@ class UpdateCoreAction:
                 "update-core: the wordpress driver was chosen without a "
                 "bridge to drive it — refusing (this is a defect; report it)"
             )
-        self._engage_maintenance(ctx, source)
         try:
             try:
                 result = bridge.core_upgrade_files(package, release.version)

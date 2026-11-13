@@ -648,6 +648,15 @@ class UpdateBridge:
         self.calls.append(("core_upgrade_files",
                            {"apply": True, "package": package,
                             "target": target}))
+        # WordPress answers EVERY request with its 503 page while
+        # ``.maintenance`` exists, and this op is a WordPress request: a
+        # driver that pre-engages the file can never start.  Model it so the
+        # live failure (HTTP 503 "maintenance") is a red test, never a green
+        # fake.
+        if ".maintenance" in self.source.files:
+            raise BridgeError(
+                "unexpected bridge response (HTTP 503): temporary "
+                "maintenance")
         if self.core_files_error is not None:
             raise BridgeError(self.core_files_error,
                               payload={"phases": {"copy": {"ok": False}},
@@ -3115,9 +3124,12 @@ def test_the_wordpress_driver_installs_the_release_and_verifies(
     assert src.files["wp-config.php"] == site_files()["wp-config.php"]
     assert src.files["wp-content/plugins/hello.php"] == \
         site_files()["wp-content/plugins/hello.php"]
-    # the maintenance window is the tool's own, engaged and removed
-    assert ".maintenance" in _files_written(src)
+    # the maintenance window is NOT the tool's to engage under this driver:
+    # the op IS a WordPress request and WordPress answers its own 503 while
+    # the file exists.  Core engages it for the copy and its success route
+    # removes it; the finally only clears what a failure left behind.
     assert ".maintenance" not in src.files
+    assert ".maintenance" not in _files_written(src)
     # the phases core reported are in the run's log
     joined = "\n".join(_messages(_records(wpt_records, logging.INFO)))
     assert "core_upgrade_files unzip: ok — extracted" in joined
