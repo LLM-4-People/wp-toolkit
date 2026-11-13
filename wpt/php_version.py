@@ -54,7 +54,7 @@ from .config import redact_text
 from .deadline import Deadline, DeadlineExceeded, transport_kwargs
 from .deploy import SshTarget
 from .log import get_logger
-from .php_probe import PhpProbe
+from .php_probe import PhpProbe, get_bounded
 from .report import write_stdout
 from .settings import PhpVersionSettings, Settings
 from .teardown import teardown_stack
@@ -163,15 +163,39 @@ def _probe(source, session, settings: Settings, wp_url: str) -> PhpProbe:
     return PhpProbe(source, session, settings.probe, wp_url)
 
 
-def _http_get(session, url: str, timeout: float) -> tuple[int, bytes]:
-    """One bounded GET; returns ``(status, body)`` (0 on transport failure)."""
+def _http_get(session, url: str, timeout: float,
+              deadline: float | None = None) -> tuple[int, bytes]:
+    """One GET under an ABSOLUTE budget; ``(status, body)``, 0 on failure.
+
+    Rides :func:`wpt.php_probe.get_bounded`, the ONE bounded-HTTP owner: a
+    per-read ``timeout`` alone lets a server dripping one header byte at a
+    time keep the call blocked for seconds, which is exactly the failure
+    that owner exists for.  The body is capped the same way the previous
+    slice did it, and the response is always closed.
+    """
     try:
-        response = session.get(url, timeout=timeout, allow_redirects=True)
-    except requests.RequestException as exc:
+        response = get_bounded(
+            session, url, timeout_s=timeout,
+            deadline=(time.monotonic() + max(0.001, float(timeout))
+                      if deadline is None else deadline),
+            allow_redirects=True,
+        )
+    except (requests.RequestException, WptError) as exc:
         log.warning("php-version: HTTP read failed for %s: %s", url,
                     redact_text(str(exc)))
         return 0, b""
-    return response.status_code, response.content[:262144]
+    try:
+        status = response.status_code
+        read = getattr(response, "read_bounded", None)
+        if callable(read):
+            body = read(262144)
+        else:
+            body = bytes(response.content[:262144])
+        return status, body
+    finally:
+        close = getattr(response, "close", None)
+        if callable(close):
+            close()
 
 
 # --------------------------------------------------------------------- engine
@@ -286,7 +310,8 @@ class _Engine:
     def _theme_root(self) -> str:
         status, body = _http_get(
             self.session, str(self.ctx.wp_url or ""),
-            float(self.pv.http_timeout_s))
+            float(self.pv.http_timeout_s),
+            self.deadline.at if self.deadline is not None else None)
         text = body.decode("utf-8", errors="replace")
         match = _THEME_RE.search(text)
         if match:
@@ -504,14 +529,16 @@ class _Engine:
         stamp = str(int(time.time()))
         status, _ = _http_get(
             self.session, f"{base}/?{_BUSTER}={stamp}",
-            float(self.pv.http_timeout_s))
+            float(self.pv.http_timeout_s),
+            self.deadline.at if self.deadline is not None else None)
         if status >= 500 or status == 0:
             raise _Refusal(
                 f"the homepage answered HTTP {status or 'nothing'} after the "
                 "switch")
         rest, _ = _http_get(
             self.session, f"{base}/wp-json/?{_BUSTER}={stamp}",
-            float(self.pv.http_timeout_s))
+            float(self.pv.http_timeout_s),
+            self.deadline.at if self.deadline is not None else None)
         if rest >= 500:
             raise _Refusal(
                 f"/wp-json/ answered HTTP {rest} after the switch")
@@ -554,15 +581,16 @@ class _Engine:
             self.result.rows.append(Row(
                 "rollback", "restored" if _minor(served) == _minor(previous)
                 else "warning",
-                f"PHP {previous} re-selected; the web server reports "
-                f"PHP {served or 'nothing'}"
+                f"PHP {previous} re-selected after {redact_text(reason)[:200]}; "
+                f"the web server reports PHP {served or 'nothing'}"
                 + ("" if _minor(served) == _minor(previous)
                    else " — check the site in the hosting panel")))
         except (WptError, OSError) as exc:
             self.result.rows.append(Row(
                 "rollback", "warning",
-                f"PHP {previous} re-selected, but the probe could not "
-                f"re-confirm it: {redact_text(str(exc))}"))
+                f"PHP {previous} re-selected after {redact_text(reason)[:200]},"
+                f" but the probe could not re-confirm it: "
+                f"{redact_text(str(exc))}"))
 
     def _recommend(self) -> str:
         """The advised minor: the profile's ``recommended`` when offered.
@@ -656,6 +684,11 @@ def _write_failed_result(ctx: "Any", result: Result, reason: str) -> None:
     A refusal after measurement must not erase what was measured: the
     blocker list and the rollback outcome are the operator's diagnosis.
     ``not_complete`` stays the ONE owner of the failure wording.
+
+    The markdown goes to STDOUT as well as the report file.  Without that,
+    the L79 flow — a lint blocker on a switch that never happened — printed
+    NOTHING when the operator passed no ``--report``, which is the one case
+    where the blocker list IS the whole value of the run.
     """
     from .actions.registry import not_complete
 
@@ -663,6 +696,7 @@ def _write_failed_result(ctx: "Any", result: Result, reason: str) -> None:
     markdown = _render(result) + block
     data = result.json_obj()
     data["run"] = payload
+    write_stdout(markdown)
     write_report(ctx, "php-version", markdown,
                  json.dumps(data, indent=2, ensure_ascii=False,
                             sort_keys=True) + "\n")

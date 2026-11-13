@@ -428,6 +428,43 @@ def test_plan_tampered_and_missing_items(tmp_path, cache_dir):
     ]
 
 
+def test_plan_skips_bundled_plugin_units(tmp_path, cache_dir):
+    """The release map ships ``wp-content/plugins/…``, but an installed
+    plugin that was updated in wp-admin differs from the bundled copy BY
+    DESIGN — live, 7.1.4 bundles a different Akismet than 6.5.14 shipped,
+    so a 6.5 -> 7.1 core update made heal-core plan a DOWNGRADE of the
+    active plugin.
+
+    This drives the ACTION's plan, not the primitive: the audit check and
+    heal-core must apply the SAME scope filter, or the plan writes bytes
+    the next audit flags as tampered on every run.  Deleting the filter
+    from ``HealCoreAction.plan`` makes this test red.
+    """
+    files = {
+        "index.php": INDEX,
+        "wp-includes/version.php": OFFICIAL_VERSION_PHP,
+        # the plugin the site actually runs: newer than the bundle
+        "wp-content/plugins/akismet/akismet.php": b"<?php // 5.3.2\n",
+    }
+    checksums = {
+        "index.php": md5(INDEX),
+        "wp-includes/version.php": md5(OFFICIAL_VERSION_PHP),
+        # the bundled bytes the map lists for the same path
+        "wp-content/plugins/akismet/akismet.php": md5(b"<?php // 4.1\n"),
+    }
+    src, session, bridge = make_stack(
+        [checksums_response(checksums)], files=files,
+    )
+    plan = HealCoreAction().plan(_ctx(tmp_path), (src, session, bridge))
+    assert plan.items == [], (
+        "a bundled plugin unit is the plugin updater's, not core's — "
+        "planning it would downgrade the active plugin")
+    # and the path is never even SENT to the digest surface
+    sent = [p for action, params in bridge.calls
+            if action == "core_md5" for p in params["paths"]]
+    assert "wp-content/plugins/akismet/akismet.php" not in sent
+
+
 def test_plan_added_files_are_notes_not_items(tmp_path, cache_dir,
                                               wpt_records):
     files = {

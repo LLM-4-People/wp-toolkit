@@ -2525,6 +2525,31 @@ def test_the_sweep_never_deletes_a_parked_tree_but_reports_it(tmp_path,
         site_files()["wp-includes/version.php"]
 
 
+def test_a_finished_site_reports_no_residue_at_plan_time(tmp_path, cache_dir,
+                                                        wpt_records):
+    """The guard rule holds at the PLAN too, not just in the sweep.
+
+    ``WP_Upgrader::unpack_package()`` leaves core's own ``index.php`` in
+    ``wp-content/upgrade/`` after EVERY successful update, so a site that
+    once updated through wp-admin carries it forever.  The plan-time
+    residue report must ask the same owner the sweep and ``doctor`` ask,
+    or a perfectly healthy site is told on every run that an earlier
+    update failed.
+    """
+    files = {**site_files(),
+             "wp-content/upgrade/index.php":
+                 b"<?php\n// Silence is golden.\n"}
+    src, session, bridge = make_stack(
+        [version_check(TARGET, CURRENT),
+         checksums_response(release_map()),
+         FakeResponse(content=release_zip_bytes(release_files())),
+         checksums_response(current_map())], files=files)
+    UpdateCoreAction().plan(_ctx(tmp_path), (src, session, bridge))
+    joined = "\n".join(_messages(_records(wpt_records, logging.WARNING)))
+    assert "wp-content/upgrade" not in joined
+    assert "residue from an EARLIER core update" not in joined
+
+
 def test_the_next_run_reports_the_residue_of_a_killed_one(tmp_path, cache_dir,
                                                           wpt_records):
     """F7/F6: the visibility half — a plan over a webroot carrying a killed
@@ -3256,6 +3281,45 @@ def test_core_s_own_upgrade_guard_is_not_unfinished_staging():
     src2 = FakeSource()
     src2.files["wp-content/upgrade/index.php"] = b"<?php // mine\n"
     assert _wp_content_residue(src2) == ["wp-content/upgrade"]
+    # a file that STARTS with the guard but carries more is not the guard
+    src3 = FakeSource()
+    src3.files["wp-content/upgrade/index.php"] = guard + b"x"
+    assert _wp_content_residue(src3) == ["wp-content/upgrade"]
+
+
+def test_staging_read_failure_is_fail_closed():
+    """An ``index.php`` the bounded read cannot answer is UNFINISHED, never
+    clean.
+
+    The FTP connector raises when a file is larger than the read bound, and
+    a real site's ``index.php`` is routinely bigger than core's 28-byte
+    guard — so "the read failed, therefore nothing to report" would hide
+    exactly the half-extraction this rule exists to surface.  It would also
+    make the Python owner disagree with the bridge, which compares the
+    exact bytes and refuses.
+    """
+    from wpt.actions.update_core import staging_is_unfinished
+    from wpt.types import Entry, SourceError
+
+    class _Oversized:
+        """A source whose bounded read refuses past the bound (FTP's shape)."""
+
+        def __init__(self, body: bytes) -> None:
+            self.body = body
+
+        def list_dir(self, path):
+            return [Entry(path=f"{path}/index.php", is_dir=False,
+                          size=len(self.body))]
+
+        def read_bytes_bounded(self, path, max_bytes):
+            if len(self.body) > max_bytes:
+                raise SourceError(
+                    f"{path!r} is larger than the {max_bytes}-byte read bound")
+            return self.body
+
+    assert staging_is_unfinished(_Oversized(b"<?php\n" + b"x" * 812)) is True
+    assert staging_is_unfinished(
+        _Oversized(b"<?php\n// Silence is golden.\n")) is False
 
 
 def test_a_verified_run_clears_only_the_staging_it_created(

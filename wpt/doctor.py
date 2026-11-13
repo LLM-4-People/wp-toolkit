@@ -162,6 +162,7 @@ from .log import get_logger
 # Imported into THIS namespace: tests monkeypatch wpt.doctor.PhpProbe.
 from .php_probe import (PhpProbe, _resolve_host_bounded, get_bounded,
                         sweep_stale_probes)
+from .actions.update_core import staging_is_unfinished
 from .report import human_bytes, md_escape
 from .report import write_stdout
 from .teardown import source_cleanup_budget
@@ -357,8 +358,6 @@ def _ftp_panel(ctx: Ctx,
                     # finished update (live: every site that ever updated
                     # through wp-admin warned forever), so the shared rule —
                     # not mere existence — decides.
-                    from .actions.update_core import staging_is_unfinished
-
                     if staging_is_unfinished(source):
                         residue.append(
                             ("wp-content/upgrade/",
