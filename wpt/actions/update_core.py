@@ -103,8 +103,9 @@ updatable.
 
 THE GUARANTEES ARE THE TOOL'S, NOT THE DRIVER'S.  Whichever driver runs,
 the same things wrap it and verify it: the pre-action snapshot, the
-pristine proof, ``.maintenance`` engaged before and removed in a
-``finally``, the migration through core's own ``wp_upgrade()``, and the
+pristine proof, ``.maintenance`` cleared in a ``finally`` (engaged by the
+tool under ``swap``, written by WordPress itself under ``wordpress``),
+the migration through core's own ``wp_upgrade()``, and the
 verify (the version re-read from a fresh process, every replaced file
 re-hashed, the live probes).  That is also why the two drivers differ
 only in HOW the bytes land — the plan, the refusals, the snapshot scope
@@ -198,13 +199,17 @@ artifact and the site can change under it):
    verify has passed, which is what makes a run that fails after the swap
    (a migration that did not reach its target, a digest that does not
    match) recoverable by hand as well as by snapshot.
-4. ``.maintenance`` is engaged before the write and removed in a
-   ``finally``: a crash, a deadline trip or a SIGTERM must never leave
-   the site in maintenance.  Under the ``wordpress`` driver this is also
-   what closes core's own reachable bad state — ``update_core()`` deletes
-   the maintenance file on its SUCCESS route only, which is the "delete
-   .maintenance over FTP" the documentation tells operators to do by
-   hand.  WordPress's own 10-minute expiry on the
+4. ``.maintenance`` is cleared in a ``finally``: a crash, a deadline trip
+   or a SIGTERM must never leave the site in maintenance.  The two drivers
+   reach that state differently — ``swap`` ENGAGES the file itself before
+   the first rename, while ``wordpress`` never does, because the bridge is
+   a WordPress request and WordPress answers its own 503 while the file
+   exists; there WordPress's own ``update_core()`` writes it just before
+   the copy and deletes it on every completed path, so only a fatal or a
+   killed request strands it.  Either way the ``finally`` removes what is
+   there — that is what closes the reachable bad state, and it is the
+   "delete .maintenance over FTP" the documentation tells operators to do
+   by hand.  WordPress's own 10-minute expiry on the
    file is the second line under that, not the first — and the file
    itself says what it is, so a site found in maintenance by a human
    is a site that says so.
@@ -936,7 +941,7 @@ class UpdateCoreAction:
         # webroot no check names, and the next command an operator runs
         # about that update is this one.  It is a REPORT — never a
         # refusal, never a mutation — and it is built on the same walk.
-        _report_residue(entries)
+        _report_residue(entries, source)
         # The DRIVER's two preconditions ride the same call: they are asked
         # for here (``core_upgrade=1``) and nowhere else, so an audit's
         # plain ``info`` never pays for the filesystem ownership probe.
@@ -1609,9 +1614,10 @@ class UpdateCoreAction:
         driver = derived.driver
         log.info(
             "plan: DRIVER = %s — %s. The plan, the refusals, the snapshot "
-            "scope, the maintenance window and the verify are the SAME for "
-            "either driver; only the mechanism that lays the bytes down "
-            "differs, and --apply runs the driver this plan names or fails",
+            "scope and the verify are the SAME for either driver; only the "
+            "mechanism that lays the bytes down differs (and with it the "
+            "maintenance window, named below), and --apply runs the driver "
+            "this plan names or fails",
             driver.name, driver.why,
         )
         migration = (None if site.db_version is None
@@ -1659,8 +1665,15 @@ class UpdateCoreAction:
             "wp-content/ is out of scope entirely",
             len(release.files) + len(read_back.stale),
         )
-        log.info(
-            "plan: %s", (
+        maintenance_line = (
+            f"{_MAINTENANCE} is WordPress's own under the "
+            f"{_DRIVER_WORDPRESS} driver: its updater writes the file just "
+            f"before the copy and deletes it on every completed path, and "
+            f"wpt clears whatever a fatal or a killed request strands — wpt "
+            f"never engages one here, because the bridge IS a WordPress "
+            f"request and WordPress would answer its own 503"
+            if derived.driver.name == _DRIVER_WORDPRESS else
+            (
                 f"{_MAINTENANCE} is engaged before the swap and removed when "
                 f"the run ends — every name (each of the {len(_CORE_TREES)} "
                 f"trees, each root file) is parked and landed back to back, "
@@ -1672,8 +1685,9 @@ class UpdateCoreAction:
                 f"NO {_MAINTENANCE} (update.maintenance is false) — "
                 f"visitors can see the swap, and each name is still parked "
                 f"and landed back to back with the same undo"
-            ),
+            )
         )
+        log.info("plan: %s", maintenance_line)
         log.info(
             "plan: snapshot scope = the %d replaced file(s) + the %d "
             "removed with them%s; the rollback is `wpt restore --undo-last`",
@@ -1727,7 +1741,7 @@ class UpdateCoreAction:
         entries = list(bounded_walk(
             source, Deadline.from_ctx(ctx), "update-core walk"))
         files = {e.path: e for e in entries if not e.is_dir}
-        _report_residue(entries)
+        _report_residue(entries, source)
         site = _site_facts(source, bridge, core_upgrade=True,
                            deadline=Deadline.from_ctx(ctx))
         if not site.version:
@@ -2102,9 +2116,10 @@ class UpdateCoreAction:
           every request with its 503 maintenance page while that file
           exists — pre-engaging it made the driver unable to start (live:
           the bridge answer was literally "Indisponibilité temporaire pour
-          cause de maintenance").  Core's own ``Core_Upgrader::upgrade()``
-          engages it for the copy and deletes it on its SUCCESS route only;
-          the ``finally`` removes whatever is left, which is the reachable
+          cause de maintenance").  WordPress's own ``update_core()`` writes
+          the file just before the copy and deletes it on every completed
+          path, so only a fatal or a killed request strands it; the
+          ``finally`` removes whatever is left, which is the reachable
           "stuck in maintenance" state this action exists to close;
         * the DATABASE step is suppressed by the op (core fires it as a
           fire-and-forget POST and never checks the response) and run by
@@ -2143,8 +2158,12 @@ class UpdateCoreAction:
                     f"snapshot (`wpt restore --undo-last`) is the rollback"
                 ) from exc
         finally:
+            # ``force``: core wrote its own ``.maintenance`` during the op
+            # whatever ``update.maintenance`` says, so clearing it is
+            # cleanup of this run's side effect, not a maintenance window
+            # the operator disabled.
             with source_cleanup_budget(source):
-                self._disengage_maintenance(ctx, source)
+                self._disengage_maintenance(ctx, source, force=True)
         self._report_phases(result)
         self._retire_stale(source, derived)
         staging = result["staging"] if result["staging_exists"] else ""
@@ -2183,8 +2202,9 @@ class UpdateCoreAction:
                 rollback["critical_code"])
         if result["maintenance_left"]:
             log.info("apply: WordPress's updater left its own .maintenance "
-                     "behind (it removes that file only on its success "
-                     "route); the tool's teardown removed it either way")
+                     "behind (it is removed on every completed path, so a "
+                     "fatal or a killed request is what strands it); the "
+                     "tool's teardown clears it on the way out")
         if result["output"]:
             log.warning("core_upgrade_files: the updater printed output "
                         "(kept, not discarded): %s%s",
@@ -2424,13 +2444,21 @@ class UpdateCoreAction:
             return
         source.write_bytes(_MAINTENANCE, _maintenance_bytes())
 
-    def _disengage_maintenance(self, ctx: "Ctx", source: "Source") -> None:
+    def _disengage_maintenance(self, ctx: "Ctx", source: "Source", *,
+                               force: bool = False) -> None:
         """Remove it, from the ``finally`` that must not be skipped.
 
         A failure here is a WARNING and not a second error: the caller is
         already unwinding with a more important one, and the file's own
         10-minute expiry means a site left in maintenance recovers by
         itself.  Saying so is honest about both.
+
+        ``update.maintenance`` gates ENGAGING a window of the tool's own —
+        it must not gate CLEANUP of a file this run caused to appear.  The
+        ``wordpress`` driver passes ``force=True`` because core's updater
+        writes its own ``.maintenance`` during the op whatever the setting
+        says; leaving that behind would keep a site the operator never
+        asked to close in maintenance for WordPress's ten minutes.
 
         Removed with ``delete`` because that is the shape THIS run
         created: a single file, written at the webroot root.  Over FTP
@@ -2440,7 +2468,7 @@ class UpdateCoreAction:
         the site stayed in maintenance for WordPress's own ten minutes
         instead of for the length of this run.
         """
-        if not ctx.settings.update.maintenance:
+        if not force and not ctx.settings.update.maintenance:
             return
         _remove_quietly(source, _MAINTENANCE, directory=False,
                         note="WordPress expires it 10 minutes after the "
@@ -2486,6 +2514,14 @@ def staging_is_unfinished(source: "Source") -> bool:
     clear (live: the second core update refused on it).  Any OTHER entry —
     a partial extraction, a ``wordpress-X.Y`` tree, a stray file — keeps
     the unfinished verdict.
+
+    FAIL-CLOSED on a read that cannot answer: a bounded read that refuses
+    an ``index.php`` past the guard's own 28 bytes is EVIDENCE that this is
+    not core's guard (core's file is exactly 28 bytes), so the directory is
+    unfinished.  An unreadable file is likewise unfinished: the one answer
+    this function must never give is "clean" for a directory it could not
+    actually inspect, because that silently drops the operator's only
+    pointer to a recovery path.
     """
     try:
         entries = list(source.list_dir(_STAGING_DIR))
@@ -2500,12 +2536,16 @@ def staging_is_unfinished(source: "Source") -> bool:
     if (len(entries) == 1 and not entries[0].is_dir
             and entries[0].path.rsplit("/", 1)[-1] == "index.php"):
         try:
-            body = source.read_bytes_bounded(entries[0].path, 64)
-        except (SourceError, OSError) as exc:   # pragma: no cover
-            log.warning("update-core: could not read %s (%s) — its residue "
-                        "is neither swept nor reported this run",
-                        entries[0].path, exc)
-            return False
+            body = source.read_bytes_bounded(entries[0].path,
+                                             len(_CORE_GUARD_INDEX))
+        except (SourceError, OSError) as exc:
+            # Not core's guard: it could not be read, or the bound refused
+            # it because it is LONGER than the guard.  Either way this
+            # directory holds something a human may need — never "clean".
+            log.warning("update-core: could not read %s as core's upgrade "
+                        "guard (%s) — treating %s as unfinished staging",
+                        entries[0].path, exc, _STAGING_DIR)
+            return True
         if body == _CORE_GUARD_INDEX:
             return False
     return True
@@ -2618,7 +2658,7 @@ def _residue_role(path: str) -> str | None:
     return update_core_residue(path)
 
 
-def _report_residue(entries: list[Entry]) -> None:
+def _report_residue(entries: list[Entry], source: "Source | None" = None) -> None:
     """REPORT every residue path the webroot carries, and who owns it.
 
     The visibility half of :func:`_sweep_residue`, and the reason a killed
@@ -2630,10 +2670,22 @@ def _report_residue(entries: list[Entry]) -> None:
     the residue shapes are trees: a presence map built from files only
     (which is what the rest of this action needs) can never see a parked
     ``wp-includes.wpt-old/`` or core's ``wp-content/upgrade/`` staging.
+
+    ``wp-content/upgrade/`` is asked through :func:`staging_is_unfinished`,
+    the SAME owner the sweep and ``doctor`` ask, so a site carrying only
+    core's own upgrade-dir guard is not told (at every plan) that an
+    earlier update failed.  One fact, one answer, whichever entry point
+    looks at it.
     """
-    _report_residue_paths(sorted(
-        {entry.path for entry in entries
-         if not entry.is_link and _residue_role(entry.path) is not None}))
+    found = {entry.path for entry in entries
+             if not entry.is_link and _residue_role(entry.path) is not None}
+    if source is not None and not staging_is_unfinished(source):
+        # Core's guard alone: the directory is a finished site's normal
+        # state, not residue.  Drop the tree and the guard with it.
+        found = {path for path in found
+                 if path != _STAGING_DIR
+                 and not path.startswith(f"{_STAGING_DIR}/")}
+    _report_residue_paths(sorted(found))
 
 
 def _report_residue_paths(found: list[str]) -> None:

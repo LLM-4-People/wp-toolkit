@@ -1516,14 +1516,19 @@ class UpdateSettings:
         wins when typed, and this key decides only in the "not typed"
         state. Shipped FALSE — a release candidate is not a version an
         operator should reach for by omission.
-    ``maintenance``: whether the update engages the webroot-root
+    ``maintenance``: whether the SWAP driver engages the webroot-root
         ``.maintenance`` file for the duration of the swap. Shipped TRUE:
         WordPress honours the file, so it is the cheapest possible
         "do not touch the site for a moment" and it is removed in the
         action's ``finally``, so a crash cannot leave the site down. Set
         it FALSE only for an operator who answers for the maintenance
         window out of band (a host-level block page, a closed lobby) and
-        accepts the partial tree a visitor can see mid-swap.
+        accepts the partial tree a visitor can see mid-swap. It does NOT
+        apply to the ``wordpress`` driver: that op is a WordPress request
+        and WordPress answers its own 503 while the file exists, so the
+        driver never engages one — WordPress's own ``update_core()``
+        writes it for the copy, and the action only clears what a fatal
+        or a killed request stranded.
     ``driver``: WHICH of the action's two file drivers installs the
         release. ``"wordpress"`` drives WordPress's OWN updater through
         the ``core_upgrade_files`` bridge op (core's ``unzip_file()`` /

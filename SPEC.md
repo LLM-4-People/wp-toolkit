@@ -1916,8 +1916,12 @@ wp.org offers and names the version a `--to` would need.
   path. The plan NAMES the driver it would use and why; the apply
   re-derives it and refuses if it changed (a driver that disappears
   mid-run must not silently swap). The refusals, the snapshot, the
-  maintenance discipline, the migration op and the verify are IDENTICAL
-  across drivers — only the write differs. The unknown-addition guard
+  migration op and the verify are IDENTICAL across drivers — only the
+  write differs, and with it the maintenance window: `swap` engages
+  `.maintenance` itself, while `wordpress` never does (the op IS a
+  WordPress request, and WordPress answers its own 503 while the file
+  exists) and instead clears whatever core's updater stranded. The
+  unknown-addition guard
   applies to both (the fix text says what the chosen driver would do: the
   swap would DELETE them, WordPress's copy would OVERWRITE them). The
   `wordpress` driver's staging is core's, and the sweep never deletes it
@@ -1932,7 +1936,9 @@ wp.org offers and names the version a `--to` would need.
   filename list; the release's PHP/MySQL floors from the version-check
   offer against the LIVE site's PHP; whether the schema must migrate;
   that maintenance mode (`.maintenance`, the file WordPress honours) will be
-  engaged; the snapshot scope with `wpt restore --undo-last` named as the
+  engaged — or, under the `wordpress` driver, that WordPress's own updater
+  writes and clears it while wpt clears any stranded leftover; the snapshot
+  scope with `wpt restore --undo-last` named as the
   rollback; and one item per replaced file PLUS one per file the swap
   DELETES (bytes 0) so the snapshot can undo that deletion. Local mode with
   `--apply` rehearses the same sequence into a copy: it does NOT take the
@@ -2088,7 +2094,7 @@ another writer and is the coordinator's to schedule.
 | L77 the only TLS signal was a low-risk `security.cert_mismatch` finding that discarded SAN/issuer/expiry and said nothing about HTTP→HTTPS or HSTS | the doctor's `tls certificate` and `https policy` rows report bounded certificate facts, verification, expiry window, redirect and HSTS; tests: `test_doctor_network.py` |
 | L78 editing a non-WordPress application file had no backup/rollback path, so a bad FTP write had no recovery point and a multi-file change could stop halfway | `wpt files` snapshots selected files (manifest + bytes + SHA-256), pairs `--path` with `--from`, writes siblings/temp and renames after read-back, rolls every already-changed target back on failure, and restores by verified snapshot; WordPress core/config paths stay refused; tests: `test_files.py` |
 | L79 a live PHP 7.2 → 8.3 switch turned the contact page into a 500: the custom theme used `<?` short tags, legal under the old ini and literal text under the new one — nothing checked the workload BEFORE the runtime changed | `php-version`'s preflight parses the ACTIVE theme/plugins with the TARGET interpreter and refuses on any failure (tests: `test_a_file_that_does_not_parse_blocks_the_switch`, `test_an_empty_lint_is_a_refusal_not_a_pass`), and a failed post-switch verification re-selects the previous minor (`test_a_switch_that_is_not_served_is_rolled_back`, `test_a_5xx_homepage_after_the_switch_rolls_back`) |
-| L80 update-core could never run TWICE on a site that ever updated through wp-admin: (a) the wordpress driver wrote `.maintenance` before calling the WordPress-loading bridge, so WordPress answered its own 503, and (b) the bridge treated core's permanent `wp-content/upgrade/index.php` guard ("<?php // Silence is golden.") as unfinished staging and refused | (a) the driver never pre-writes `.maintenance` (core's own upgrader engages it for the copy; the teardown removes residue) and the fake bridge now answers 503 when it exists (`test_the_wordpress_driver_installs_the_release_and_verifies`); (b) only core's EXACT guard bytes are exempt, every other entry still refuses (`test_core_upgrade_files_accepts_core_s_own_upgrade_dir_guard`, `test_core_upgrade_files_ignores_a_non_guard_index_but_refuses_staging`, `test_core_s_own_upgrade_guard_is_not_unfinished_staging`) |
+| L80 update-core could never run TWICE on a site that ever updated through wp-admin: (a) the wordpress driver wrote `.maintenance` before calling the WordPress-loading bridge, so WordPress answered its own 503, and (b) the bridge treated core's permanent `wp-content/upgrade/index.php` guard ("<?php // Silence is golden.") as unfinished staging and refused | (a) the driver never pre-writes `.maintenance` (core's own upgrader engages it for the copy; the teardown removes residue) and the fake bridge now answers 503 when it exists (`test_the_wordpress_driver_installs_the_release_and_verifies`); (b) only core's EXACT guard bytes are exempt, every other entry still refuses (`test_core_upgrade_files_accepts_core_s_own_upgrade_dir_guard`, `test_core_upgrade_files_ignores_a_non_guard_index_but_refuses_staging`, `test_core_upgrade_files_requires_the_exact_guard_bytes`, `test_core_s_own_upgrade_guard_is_not_unfinished_staging`, `test_staging_read_failure_is_fail_closed`, `test_a_finished_site_reports_no_residue_at_plan_time`) |
 
 ## Documentation
 - `README.md` — usage and the canonical command table.

@@ -8280,6 +8280,23 @@ def test_core_upgrade_files_ignores_a_non_guard_index_but_refuses_staging(bridge
     assert "already holds 1 entr" in data["error"]
 
 
+def test_core_upgrade_files_requires_the_exact_guard_bytes(bridge):
+    """The exemption is an EXACT byte comparison, not a prefix or a
+    trimmed match: a file that STARTS with the guard but carries anything
+    else is a site's own content and stays staged work."""
+    guard = b"<?php\n// Silence is golden.\n"
+    upgrade = bridge.docroot / "wp-content" / "upgrade"
+    upgrade.mkdir(parents=True, exist_ok=True)
+    for index, extra in enumerate(
+            (guard + b"x", guard + b"\n", guard + b"// extra\n")):
+        (upgrade / "index.php").write_bytes(extra)
+        package = _upload_release(bridge)
+        data = bridge.call("core_upgrade_files", {
+            "apply": True, "package": package, "target": "7.1.2"}).json()
+        assert data["ok"] is False, f"superset #{index} was exempted"
+        assert "already holds 1 entr" in data["error"]
+
+
 def test_core_upgrade_files_refuses_to_wipe_an_earlier_staging(bridge):
     """core's unpack_package() WIPES wp-content/upgrade/ on its way in, so
     a non-empty one is an earlier core update that did not finish — and its

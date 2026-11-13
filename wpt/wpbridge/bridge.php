@@ -4740,11 +4740,13 @@ function wpt_core_upgrade_block_db_step( $preempt, $args, $url ) {
  *
  * WHAT THE OP DOES NOT DO, and why each is the caller's job:
  *
- * * ``.maintenance`` — core writes it and deletes it on ITS success route
- *   only, which is the reachable "stuck in maintenance" state.  wpt writes
- *   its own (with a body a human can read) before the op and removes it in a
- *   ``finally`` that no core path can skip.  The op REPORTS whether core
- *   left one behind.
+ * * ``.maintenance`` — core writes it just before the copy and deletes it on
+ *   every completed path, so only a fatal or a killed request strands it;
+ *   that leftover is the reachable "stuck in maintenance" state.  The caller
+ *   must NOT pre-write one: this op IS a WordPress request, and WordPress
+ *   answers its own 503 while the file exists.  The caller removes whatever
+ *   is left in a ``finally`` that no core path can skip, and the op REPORTS
+ *   whether core left one behind.
  * * the database step — see :func:`wpt_core_upgrade_block_db_step`.
  * * the verification — the caller re-reads the version and re-hashes every
  *   replaced file.  Core's success return is a version STRING; it does not

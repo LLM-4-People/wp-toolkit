@@ -262,7 +262,7 @@ def test_dry_run_lints_with_the_target_and_never_switches(wire, tmp_path):
     assert "preflight" in (tmp_path / "php-version.md").read_text()
 
 
-def test_a_file_that_does_not_parse_blocks_the_switch(wire, tmp_path):
+def test_a_file_that_does_not_parse_blocks_the_switch(wire, tmp_path, capsys):
     state, install = wire
     runner = FakeRunner(
         list_text=LIST, current_text=CURRENT_72,
@@ -274,6 +274,29 @@ def test_a_file_that_does_not_parse_blocks_the_switch(wire, tmp_path):
     assert runner.selected == []
     body = (tmp_path / "php-version.md").read_text()
     assert "blocker" in body and "template-contact.php" in body
+    # the blocker list is the whole value of this run, so it reaches
+    # STDOUT too — an operator who passed no --report still sees it
+    out = capsys.readouterr().out
+    assert "blocker" in out and "template-contact.php" in out
+
+
+def test_a_blocked_switch_prints_its_blockers_without_a_report_file(
+        wire, tmp_path, capsys):
+    """The one flow whose entire value is the blocker list must reach the
+    operator even with no ``--report``: a run that printed nothing looked
+    like a crash rather than a refusal (L79)."""
+    state, install = wire
+    runner = FakeRunner(
+        list_text=LIST, current_text=CURRENT_72,
+        lint_text=lint_ok(2)
+        + "WPT_LINT_FAIL wp-content/themes/yveslessard/template-contact.php\n")
+    install(runner=runner, probes=["7.2.34"])
+    rc = pv.run(make_ctx(tmp_path, target="8.3", report=False))
+    assert rc == 1
+    assert runner.selected == []
+    out = capsys.readouterr().out
+    assert "template-contact.php" in out
+    assert "blocker" in out.lower()
 
 
 def test_an_empty_lint_is_a_refusal_not_a_pass(wire, tmp_path):
