@@ -3233,6 +3233,31 @@ def test_the_staging_under_wp_content_is_reported_and_never_swept(
                    for p in src.files)
 
 
+def test_core_s_own_upgrade_guard_is_not_unfinished_staging():
+    """``WP_Upgrader::unpack_package()`` leaves
+    ``wp-content/upgrade/index.php`` ("<?php // Silence is golden.") behind
+    on every SUCCESSFUL update.  Reporting it as unfinished staging (and
+    letting the bridge refuse on it) blocked the second update of a site
+    that ever updated through wp-admin — the live failure."""
+    from wpt.actions.update_core import _wp_content_residue
+    from tests.fakes import FakeSource
+
+    guard = b"<?php\n// Silence is golden.\n"
+    src = FakeSource()
+    src.files["wp-content/upgrade/index.php"] = guard
+    assert _wp_content_residue(src) == []
+    # the directory alone is nothing to recover from either
+    src.files.pop("wp-content/upgrade/index.php")
+    assert _wp_content_residue(src) == []
+    # a real partial extraction is still residue
+    src.files["wp-content/upgrade/wordpress-7.0/version.php"] = b"<?php"
+    assert _wp_content_residue(src) == ["wp-content/upgrade"]
+    # and a site's OWN index.php is not core's guard
+    src2 = FakeSource()
+    src2.files["wp-content/upgrade/index.php"] = b"<?php // mine\n"
+    assert _wp_content_residue(src2) == ["wp-content/upgrade"]
+
+
 def test_a_verified_run_clears_only_the_staging_it_created(
         tmp_path, cache_dir):
     """The narrow half of the rule: a run that CREATED the staging and

@@ -2473,26 +2473,65 @@ def _residue_entries(source: "Source") -> list[tuple[str, bool]]:
     )
 
 
+_CORE_GUARD_INDEX = b"<?php\n// Silence is golden.\n"
+
+
+def staging_is_unfinished(source: "Source") -> bool:
+    """True when ``wp-content/upgrade/`` holds anything but core's guard.
+
+    WordPress creates the directory and writes exactly one ``index.php``
+    (the "Silence is golden." guard) on every successful update; a site
+    that ever updated through wp-admin therefore carries that file forever.
+    Reporting it as unfinished staging was noise the operator could not
+    clear (live: the second core update refused on it).  Any OTHER entry —
+    a partial extraction, a ``wordpress-X.Y`` tree, a stray file — keeps
+    the unfinished verdict.
+    """
+    try:
+        entries = list(source.list_dir(_STAGING_DIR))
+    except (SourceError, OSError) as exc:   # pragma: no cover
+        log.warning("update-core: could not list %s (%s) — its residue is "
+                    "neither swept nor reported this run", _STAGING_DIR, exc)
+        return False
+    if not entries:
+        # The directory exists but is empty: nothing to recover from and
+        # nothing an operator must act on.
+        return False
+    if (len(entries) == 1 and not entries[0].is_dir
+            and entries[0].path.rsplit("/", 1)[-1] == "index.php"):
+        try:
+            body = source.read_bytes_bounded(entries[0].path, 64)
+        except (SourceError, OSError) as exc:   # pragma: no cover
+            log.warning("update-core: could not read %s (%s) — its residue "
+                        "is neither swept nor reported this run",
+                        entries[0].path, exc)
+            return False
+        if body == _CORE_GUARD_INDEX:
+            return False
+    return True
+
+
 def _wp_content_residue(source: "Source") -> list[str]:
     """The ``wp-content/`` residue DIRECTORIES currently on the site.
 
-    Two existence probes, not a walk: both shapes are directories
-    (``wp-content/upgrade/`` is a whole staging tree, ``wp-content/
-    wpt-update/`` holds one package), so naming the directory is both the
-    cheap answer and the answer an operator can act on.  A probe that
-    fails is a warning, never a silent empty — a sweep that could not see
-    is a sweep that cannot report.
+    ``wp-content/upgrade/`` is probed as a TREE: core leaves its own
+    directory guard behind on success, so only other content is unfinished
+    staging (``staging_is_unfinished``).  ``wp-content/wpt-update/`` holds
+    one package, so existence is the answer.  A probe that fails is a
+    warning, never a silent empty — a sweep that could not see is a sweep
+    that cannot report.
     """
     out: list[str] = []
-    for path in (_STAGING_DIR, _PACKAGE_DIR):
-        try:
-            there = source.exists(path)
-        except (SourceError, OSError) as exc:   # pragma: no cover
-            log.warning("update-core: could not check %s (%s) — its residue "
-                        "is neither swept nor reported this run", path, exc)
-            continue
-        if there:
-            out.append(path)
+    if staging_is_unfinished(source):
+        out.append(_STAGING_DIR)
+    try:
+        there = source.exists(_PACKAGE_DIR)
+    except (SourceError, OSError) as exc:   # pragma: no cover
+        log.warning("update-core: could not check %s (%s) — its residue is "
+                    "neither swept nor reported this run", _PACKAGE_DIR, exc)
+        there = False
+    if there:
+        out.append(_PACKAGE_DIR)
     return out
 
 

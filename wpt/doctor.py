@@ -349,12 +349,17 @@ def _ftp_panel(ctx: Ctx,
                 try:
                     _check(deadline, "doctor residue")
                     # WordPress's updater leaves a DIRECTORY named
-                    # wp-content/upgrade; a regular file with that name is
-                    # ordinary site content and must not be labelled core
-                    # staging (DOC3).
-                    if any(entry.path.rstrip("/") == "wp-content/upgrade"
-                           and entry.is_dir
-                           for entry in source.list_dir("wp-content")):
+                    # wp-content/upgrade behind, containing core's own
+                    # index.php guard on every successful update.  A
+                    # regular file with that name is ordinary site content
+                    # and must not be labelled core staging (DOC3), and the
+                    # guard index alone is the NORMAL state after a
+                    # finished update (live: every site that ever updated
+                    # through wp-admin warned forever), so the shared rule —
+                    # not mere existence — decides.
+                    from .actions.update_core import staging_is_unfinished
+
+                    if staging_is_unfinished(source):
                         residue.append(
                             ("wp-content/upgrade/",
                              "WordPress's own updater staging"))

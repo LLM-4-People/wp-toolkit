@@ -1057,6 +1057,29 @@ def test_D_RESIDUE_core_updater_staging_is_detected(monkeypatch, tmp_path):
     assert "WordPress's own updater staging" in rows["wpt residue"]["detail"]
 
 
+def test_D_RESIDUE_core_guard_index_alone_is_not_staging(monkeypatch, tmp_path):
+    """``WP_Upgrader::unpack_package()`` leaves
+    ``wp-content/upgrade/index.php`` (the "Silence is golden." guard) after
+    EVERY successful update.  A finished site must not wear the "earlier
+    update did not finish" warning forever (live)."""
+    bridge = ScriptedBridge(INFO)
+    _patch(
+        monkeypatch, bridge, script=[_home_ok(), _wporg_ok()],
+        files={
+            **WEBROOT,
+            "wp-content/upgrade/index.php": b"<?php\n// Silence is golden.\n",
+        })
+    _install_probe(monkeypatch)
+    _patch_logs(monkeypatch)
+    _patch_network(monkeypatch)
+    ctx = _ftp_ctx(tmp_path)
+
+    assert wpt.doctor.run(ctx) == 0
+
+    _data, rows = _rows(ctx)
+    assert "wpt residue" not in rows
+
+
 def test_D_SKIP_host_log_skipped_file_is_a_warn_not_a_clean_pass(
         monkeypatch, tmp_path):
     bridge = ScriptedBridge(INFO)

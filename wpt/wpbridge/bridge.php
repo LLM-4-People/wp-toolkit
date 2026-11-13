@@ -4833,7 +4833,18 @@ function wpt_action_core_upgrade_files( array $params ) {
 		throw new RuntimeException( 'WordPress could not resolve WP_CONTENT_DIR on this install — there is no staging directory to extract into' );
 	}
 	$upgrade_folder = $content_dir . 'upgrade/';
-	$existing       = wpt_core_upgrade_dirlist_names( $upgrade_folder );
+	// Core's OWN unpack_package() writes this directory and leaves one
+	// ``index.php`` guard in it ("<?php // Silence is golden.") on EVERY
+	// successful update, so that exact file is not staging: treating it as
+	// unfinished work refused the NEXT update forever (live: a site updated
+	// through wp-admin had no other entry, and this guard blocked wpt).
+	$existing = array_values( array_filter(
+		wpt_core_upgrade_dirlist_names( $upgrade_folder ),
+		static function ( $name ) use ( $upgrade_folder ) {
+			return ! ( 'index.php' === $name
+				&& wpt_core_upgrade_is_guard_index( $upgrade_folder ) );
+		}
+	) );
 	if ( $existing ) {
 		// core's unpack_package() WIPES the upgrade folder on its way in, so
 		// starting with content there would delete a recovery path silently.
@@ -5144,6 +5155,24 @@ function wpt_core_upgrade_staging( $working ) {
 function wpt_core_upgrade_slash( $path ) {
 	$path = str_replace( '\\', '/', (string) $path );
 	return ( '' === $path || '/' === substr( $path, -1 ) ) ? $path : $path . '/';
+}
+
+/**
+ * True when ``wp-content/upgrade/index.php`` is CORE's own directory guard.
+ *
+ * ``WP_Upgrader::unpack_package()`` creates the upgrade directory and, when
+ * it is missing, writes exactly ``"<?php\n// Silence is golden.\n"`` into
+ * ``index.php`` (wp-admin/includes/class-wp-upgrader.php).  It leaves that
+ * file behind on success.  Any OTHER content is a site's own file and stays
+ * part of the "unfinished staging" refusal.
+ */
+function wpt_core_upgrade_is_guard_index( $upgrade_folder ) {
+	$path = $upgrade_folder . 'index.php';
+	if ( ! is_file( $path ) ) {
+		return false;
+	}
+	$bytes = @file_get_contents( $path, false, null, 0, 64 );
+	return is_string( $bytes ) && "<?php\n// Silence is golden.\n" === $bytes;
 }
 
 /**
