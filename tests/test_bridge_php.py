@@ -8251,6 +8251,35 @@ def test_core_upgrade_files_refuses_a_filesystem_core_cannot_drive(bridge):
     (bridge.docroot / "wpt-stub-fs-method").unlink()
 
 
+def test_core_upgrade_files_accepts_core_s_own_upgrade_dir_guard(bridge):
+    """``WP_Upgrader::unpack_package()`` creates ``wp-content/upgrade/`` and
+    leaves ``index.php`` ("<?php // Silence is golden.") there on EVERY
+    successful update.  Treating that file as unfinished staging refused the
+    NEXT update forever (live: the second wpt update of a site updated
+    through wp-admin).  The guard file must be ignored, not a blocker."""
+    upgrade = bridge.docroot / "wp-content" / "upgrade"
+    upgrade.mkdir(parents=True, exist_ok=True)
+    guard = b"<?php\n// Silence is golden.\n"
+    (upgrade / "index.php").write_bytes(guard)
+    package = _upload_release(bridge)
+    data = bridge.call("core_upgrade_files", {
+        "apply": True, "package": package, "target": "7.1.2"}).json()
+    assert data["ok"] is True, data.get("error")
+
+
+def test_core_upgrade_files_ignores_a_non_guard_index_but_refuses_staging(bridge):
+    """Only CORE's exact guard bytes are exempt: a site's own ``index.php``
+    with other content still means an unfinished staging it must keep."""
+    upgrade = bridge.docroot / "wp-content" / "upgrade"
+    upgrade.mkdir(parents=True, exist_ok=True)
+    (upgrade / "index.php").write_bytes(b"<?php // the operator's file\n")
+    package = _upload_release(bridge)
+    data = bridge.call("core_upgrade_files", {
+        "apply": True, "package": package, "target": "7.1.2"}).json()
+    assert data["ok"] is False
+    assert "already holds 1 entr" in data["error"]
+
+
 def test_core_upgrade_files_refuses_to_wipe_an_earlier_staging(bridge):
     """core's unpack_package() WIPES wp-content/upgrade/ on its way in, so
     a non-empty one is an earlier core update that did not finish — and its

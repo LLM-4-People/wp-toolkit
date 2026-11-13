@@ -51,6 +51,10 @@ snapshot or the original archive available.
 - `backup` — full-site snapshot: files and tables with a manifest.
 - `restore` — list snapshots or restore one; dry-run unless `--apply`.
 - `files` — snapshot, edit, or roll back selected regular files.
+- `php-version` — switch the account's PHP runtime with the hosting PHP Selector
+  over SSH; preflight-lints the active theme/plugins with the target
+  interpreter and rolls back automatically if the switch does not verify.
+  FTP only (needs `--ssh-target`).
 - `deploy` — stream a prepared webroot zip over SSH without landing the archive
   on the host; additive, never deletes.
 

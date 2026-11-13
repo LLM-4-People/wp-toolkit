@@ -674,6 +674,59 @@ class FilesSettings:
 
 
 @dataclass
+class PhpVersionSettings:
+    """Bounds and policy for ``wpt php-version`` (the host runtime switch).
+
+    The switch itself is CloudLinux's PHP Selector (``selectorctl``); this
+    section owns every number and path the command reads.  ``selectorctl``
+    is the remote binary name, ``command_timeout_s`` bounds one selector
+    call, ``lint_timeout_s``/``lint_max_files`` bound the preflight parse
+    pass over the ACTIVE workload, and ``verify_retries``/``verify_delay_s``
+    bound the post-switch probe re-read (the web SAPI can lag the selector
+    by one request on some hosts).
+    """
+
+    selectorctl: str = "/usr/bin/selectorctl"
+    #: The minor the advice names when it is offered.  WordPress's own
+    #: published recommendation (8.3) — NOT the selector's newest minor:
+    #: a brand-new PHP release is not what a live site should be pushed to
+    #: by a report line.  An operator who wants another target passes
+    #: ``--to`` explicitly.
+    recommended: str = "8.3"
+    command_timeout_s: int = 60
+    lint_timeout_s: int = 600
+    lint_max_files: int = 6000
+    lint_max_failures: int = 50
+    verify_retries: int = 3
+    verify_delay_s: float = 2.0
+    http_timeout_s: int = 30
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.selectorctl, str) or not self.selectorctl.strip():
+            raise SettingsError(
+                "php_version.selectorctl: expected the remote selector command "
+                f"name (got {self.selectorctl!r})")
+        if not isinstance(self.recommended, str) \
+                or not re.fullmatch(r"\d+\.\d+", self.recommended):
+            raise SettingsError(
+                "php_version.recommended: expected a two-component version "
+                f"like '8.3' (got {self.recommended!r})")
+        for name in ("command_timeout_s", "lint_timeout_s", "lint_max_files",
+                     "lint_max_failures", "verify_retries", "http_timeout_s"):
+            value = getattr(self, name)
+            if isinstance(value, bool) or not isinstance(value, int) or value < 1:
+                raise SettingsError(
+                    f"php_version.{name}: expected an integer >= 1, got {value!r}"
+                )
+        delay = self.verify_delay_s
+        if isinstance(delay, bool) or not isinstance(delay, (int, float)) \
+                or delay < 0:
+            raise SettingsError(
+                "php_version.verify_delay_s: expected a number >= 0, got "
+                f"{delay!r}")
+
+
+@dataclass
 class RunSettings:
     """Per-run self-bounding policy — the graceful replacement for ever
     killing a wedged run from outside: when a command's hot loops exceed
@@ -1748,6 +1801,7 @@ class Settings:
     logs: LogsSettings = field(default_factory=LogsSettings)
     backup: BackupSettings = field(default_factory=BackupSettings)
     files: FilesSettings = field(default_factory=FilesSettings)
+    php_version: PhpVersionSettings = field(default_factory=PhpVersionSettings)
     walk: WalkSettings = field(default_factory=WalkSettings)
     discover: DiscoverSettings = field(default_factory=DiscoverSettings)
     suspicious: SuspiciousSettings = field(default_factory=SuspiciousSettings)
@@ -2203,7 +2257,7 @@ _COMPLETE_SECTIONS = frozenset({"DeploySettings", "WebpSettings",
                                 "WpOrgSettings", "ProxySettings", "ProbeSettings",
                                 "LogsSettings", "TlsSettings",
                                 "SourceScanSettings", "DiscoverSettings",
-                                "FilesSettings"})
+                                "FilesSettings", "PhpVersionSettings"})
 
 
 def _load_section(section_dc: type, key: str, raw: dict[str, Any]) -> Any:
@@ -2285,6 +2339,7 @@ _SECTIONS: dict[str, type] = {
     "logs": LogsSettings,
     "backup": BackupSettings,
     "files": FilesSettings,
+    "php_version": PhpVersionSettings,
     "walk": WalkSettings,
     "discover": DiscoverSettings,
     "suspicious": SuspiciousSettings,

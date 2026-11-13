@@ -219,6 +219,7 @@ from ..audit.integrity import (
     _fetch_comparison_checksums,
     affected_files_bridge,
     affected_files_local,
+    core_checksums,
     resolve_core_locale,
     resolve_theme_skew,
     resolve_translation_pack_skew,
@@ -328,6 +329,11 @@ class HealCoreAction:
                     f"cannot heal: wp.org checksums for WP {version} are "
                     "unavailable — no comparison basis; refusing to heal"
                 )
+            # Bundled plugin units are the plugin updater's, not core's —
+            # the SAME filter the audit check applies, so plan and audit
+            # can never disagree (live: 7.1.4's bundled Akismet differs
+            # from the site's updated one).
+            checksums = core_checksums(checksums)
             if bridge is not None:
                 affected = affected_files_bridge(
                     bridge, files, checksums,

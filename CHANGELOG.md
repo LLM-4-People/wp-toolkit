@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `wpt php-version` — switch the hosting account's PHP runtime through the
+  CloudLinux PHP Selector over SSH. It preflight-lints the active
+  theme/plugins with the TARGET interpreter before changing anything, verifies
+  the switch through the standalone probe and the served site, and rolls back
+  to the previous minor when verification fails.
+
+### Fixed
+
+- Core integrity no longer reports bundled plugin units
+  (`wp-content/plugins/…`) as tampered core. An Akismet updated in wp-admin
+  differs from the release bundle by design, so a core update used to make
+  `heal-core` plan a downgrade of the active plugin.
+- `update-core` can run a second time on a site that ever updated through
+  wp-admin. The `wordpress` driver no longer pre-engages `.maintenance`
+  (WordPress answers its own 503 while it exists), and core's permanent
+  `wp-content/upgrade/index.php` guard is no longer read as unfinished
+  staging.
+
 ## [0.1.0] — 2026-10-21
 
 ### Added

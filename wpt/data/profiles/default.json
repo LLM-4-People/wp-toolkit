@@ -451,5 +451,16 @@
   "files": {
     "max_files": 20,
     "max_file_bytes": 8388608
+  },
+  "php_version": {
+    "selectorctl": "/usr/bin/selectorctl",
+    "recommended": "8.3",
+    "command_timeout_s": 60,
+    "lint_timeout_s": 600,
+    "lint_max_files": 6000,
+    "lint_max_failures": 50,
+    "verify_retries": 3,
+    "verify_delay_s": 2.0,
+    "http_timeout_s": 30
   }
 }

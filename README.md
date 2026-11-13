@@ -143,6 +143,7 @@ The command set (all work from either source unless noted):
 | `logs` | Read bounded host/webroot error logs (DirectAdmin/panel log dirs, `error_log`, `debug.log`, `.tar.gz` archives) and report fatal/error patterns — **FTP only**, no `--wp-url` needed |
 | `discover` | Find WordPress webroot candidates from the FTP account root (`domains/*/public_html`, cPanel-style `<domain>/public_html`, `public_html`, …) — **FTP only**, no `--webroot`/`--wp-url` needed |
 | `files` | Snapshot (`--backup PATH`), transactionally edit (`--path PATH --from LOCAL`, `--apply`), or roll back (`--restore SNAPSHOT`, `--apply`) selected regular files; every apply snapshots first; every restore (managed name/`last` or an explicit path) requires the current manifest identity (`site_raw` + `webroot`) — an explicit path selects the snapshot location, never a trust bypass; `--backup` may READ protected files, while edit/restore refuse WordPress core/config paths (including any `.htaccess`). Local mode can only **back up** from a zip |
+| `php-version` | Switch the account's PHP runtime with the hosting PHP Selector over SSH (`--to X.Y`, never implicit): preflight `php -l` of the ACTIVE theme/plugins with the target interpreter, probe + HTTP verification after the switch, and automatic rollback to the previous minor on failure — **FTP only** (needs `--ssh-target`) |
 | `proxy` | Local TLS-terminating browser proxy for pre-migration sites (DNS override) |
 
 **The proxy's certificate in a browser:** `wpt proxy` mints a throwaway

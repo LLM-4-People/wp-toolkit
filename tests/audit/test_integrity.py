@@ -704,7 +704,9 @@ def test_clean_core_silent(cache_dir):
     # ONE bulk core_md5 call carrying the map's paths — no per-file
     # reads of the digest surface (the source fails the test on any
     # read other than the locale resolver's version.php)
-    assert bridge.calls == [("core_md5", {"paths": list(core_checksums())})]
+    assert bridge.calls == [("core_md5", {"paths": [
+        path for path in core_checksums()
+        if not path.startswith("wp-content/plugins/")]})]
 
 
 # -------------------------------------------------------------- tampered
@@ -877,10 +879,12 @@ def test_ftp_missing_scope_reads_version_php_once(cache_dir):
     ]
     assert findings[0].count == 2  # version.php appears once, as clean
     assert source.reads == ["wp-includes/version.php"]
-    # one bulk digest call; every map path sent exactly once
+    # one bulk digest call; every IN-SCOPE map path sent exactly once
+    # (bundled plugin units are the plugin updater's, never core's)
     assert [c[0] for c in bridge.calls] == ["core_md5"]
     sent = bridge.calls[0][1]["paths"]
-    assert sent == list(checksums)
+    assert sent == [path for path in checksums
+                    if not path.startswith("wp-content/plugins/")]
     assert len(sent) == len(set(sent))
 
 
@@ -1009,17 +1013,21 @@ def test_junk_demanded_subtraction_is_version_scoped():
 
 
 def test_ftp_unreadable_null_digest_skipped(cache_dir, wpt_records):
-    # null digest = unreadable; hello.php lands in NO bucket (the
-    # contract-drift shape) — both are debug skips, never findings; the
-    # genuinely tampered path still reports
+    # null digest = unreadable; a map path landing in NO bucket (the
+    # contract-drift shape) is also a debug skip, never a finding; the
+    # genuinely tampered path still reports.  ``hello.php`` is used for the
+    # no-bucket shape because the bundled-plugin scope filter drops it
+    # before the request — so the drift path must be a CORE path.
     source, entries = no_read_tree(CORE)
-    session = FakeSession([checksums_response(core_checksums())])
+    checksums = core_checksums()
+    checksums["wp-admin/includes/drift.php"] = md5(b"<?php // drift")
+    session = FakeSession([checksums_response(checksums)])
     payload = {
         "ok": True,
         "files": {
             "wp-trackback.php": md5(b"<?php // EVIL\n"),   # tampered
             "wp-includes/version.php": None,               # unreadable
-            # hello.php deliberately in no bucket
+            # wp-admin/includes/drift.php deliberately in no bucket
         },
         "missing": [],
         "unreadable": ["wp-includes/version.php"],
@@ -1033,7 +1041,7 @@ def test_ftp_unreadable_null_digest_skipped(cache_dir, wpt_records):
     ]
     debugs = check_debugs(wpt_records)
     assert any("wp-includes/version.php" in m for m in debugs)
-    assert any("wp-content/plugins/hello.php" in m for m in debugs)
+    assert any("wp-admin/includes/drift.php" in m for m in debugs)
 
 
 def test_ftp_unsendable_paths_dropped(cache_dir, wpt_records):
@@ -1608,6 +1616,26 @@ def test_R9_P1_integrity_helpers_re_raise_a_cooperative_stop(monkeypatch):
     with pytest.raises(StopRequested):
         integrity._split_known_added(
             [("added", "x.php", 5)], _StopRead(), settings)
+
+
+def test_bundled_plugin_units_are_not_core_integrity():
+    """The release zip ships ``wp-content/plugins/akismet/`` and
+    ``hello.php``, and the checksum map lists them.  An installed Akismet
+    that was updated in wp-admin differs from the bundled build by design
+    (live: 7.1.4's bundle differs from the site's 5.3.2, and heal-core
+    planned a plugin downgrade).  Plugin units are the plugin updater's.
+    """
+    from wpt.audit import integrity
+
+    source, entries = tree({"wp-cron.php": b"x",
+                            "wp-content/plugins/akismet/akismet.php": b"old"})
+    files = {entry.path: entry for entry in source.walk()}
+    checksums = {"wp-cron.php": md5(b"x"),
+                 "wp-content/plugins/akismet/akismet.php": "0" * 32}
+    scoped = integrity.core_checksums(checksums)
+    assert scoped == {"wp-cron.php": md5(b"x")}
+    assert integrity.affected_files_local(
+        source, files, scoped, junk_patterns=[]) == []
 
 
 def test_R22_known_added_matches_the_exact_top_level_path_only():
