@@ -408,6 +408,14 @@ _VERSION_PHP = "wp-includes/version.php"
 #: (``$wp_local_package = 'fr_CA';`` — a simple single-quoted string, the
 #: only shape WordPress ships).
 _WP_LOCAL_PACKAGE_RE = re.compile(r"\$wp_local_package\s*=\s*'([^']*)'")
+#: Bundled plugin units (``wp-content/plugins/akismet/``, ``hello.php``).
+#: The release checksum map includes them, but an INSTALLED plugin that was
+#: updated in wp-admin (Akismet is the live case: 6.5.14 bundled the same
+#: 5.3.2 the site ran; 7.1.4 bundles a different one) differs from the
+#: bundled copy by design.  Plugin units are the plugin updater's, never
+#: core-integrity evidence — the theme-skew rule [L12] applied to the other
+#: bundled unit type.
+_PLUGINS_PREFIX = "wp-content/plugins/"
 
 #: Kind ranking for the grouped finding's deterministic (kind, path)
 #: order and its severity-derived risk: tampered and added are
@@ -799,6 +807,21 @@ def added_files(
         if under_core or "/" not in path:  # core dirs or webroot top level
             affected.append(("added", path, entry.size))
     return affected
+
+
+def core_checksums(checksums: dict[str, str]) -> dict[str, str]:
+    """The checksum map minus the BUNDLED PLUGIN units.
+
+    ``wordpress-<V>-<locale>.zip`` ships ``wp-content/plugins/akismet/``
+    and ``hello.php``, and the checksums map lists them.  An installed
+    Akismet that was updated in wp-admin (or simply differs from the
+    bundled build) is a PLUGIN fact, not tampered core: 7.1.4 bundles a
+    different Akismet than 6.5.14 shipped, so a 6.5→7.1 core update made
+    heal-core plan a downgrade of the active plugin until this rule
+    existed.  Order is preserved; the caller's map is never mutated.
+    """
+    return {path: digest for path, digest in checksums.items()
+            if not path.startswith(_PLUGINS_PREFIX)}
 
 
 def affected_files_local(
@@ -1429,6 +1452,9 @@ def check_core_integrity(data: AuditData, settings: Settings) -> list[Finding]:
         if checksums is None:
             log.warning("core integrity skipped: checksums unavailable")
             return []
+        # Bundled plugin units are the plugin updater's, not core's (the
+        # map ships them; an updated Akismet differs by design).
+        checksums = core_checksums(checksums)
         if data.mode == "ftp":
             affected = _affected_files_bridge(data, checksums, settings)
             if affected is None:
